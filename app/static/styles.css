@@ -244,6 +244,11 @@ code {
   margin-top: 16px;
 }
 
+.result-detail {
+  margin-top: 12px !important;
+  font-size: 0.92rem;
+}
+
 .meta-pill {
   border-radius: 999px;
   padding: 8px 12px;

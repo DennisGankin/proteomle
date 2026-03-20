@@ -3,7 +3,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Protein Guessing Game</title>
-    <link rel="stylesheet" href="/static/styles.css?v=5" />
+    <link rel="stylesheet" href="/static/styles.css?v=7" />
   </head>
   <body>
     <div class="page-shell">
@@ -12,7 +12,7 @@
           <p class="eyebrow">Proteomle</p>
           <h1>Guess the hidden human protein.</h1>
           <p class="hero-text">
-            Enter a UniProt accession, gene symbol, or protein name. Every guess comes back with a cosine similarity score,
+            Enter a UniProt accession, gene symbol, or protein name. Every guess comes back with a target-relative similarity percentile,
             a closeness hint, and a top-100 rank when you hit the inner circle.
           </p>
         </div>
@@ -60,7 +60,7 @@
           <div id="latest-result" class="result-card empty">
             <p class="result-kicker">Latest result</p>
             <h3>Waiting for your first guess</h3>
-            <p>Similarity, closeness, and rank feedback will show up here.</p>
+            <p>Percentile, closeness, and rank feedback will show up here.</p>
           </div>
         </section>
 
@@ -94,7 +94,7 @@
               <tr>
                 <th>Guess</th>
                 <th>Name</th>
-                <th>Similarity</th>
+                <th>Percentile</th>
                 <th>Message</th>
                 <th>Rank</th>
               </tr>
@@ -109,6 +109,6 @@
       </section>
     </div>
 
-    <script src="/static/app.js?v=5" defer></script>
+    <script src="/static/app.js?v=7" defer></script>
   </body>
 </html>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 from contextlib import asynccontextmanager
@@ -36,14 +37,53 @@ def normalize_query(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "", value.upper()).strip()
 
 
-def closeness_message(similarity: float, is_correct: bool = False) -> str:
+@dataclass(frozen=True)
+class SimilarityCalibration:
+    close: float
+    very_close: float
+    extremely_close: float
+    version: str = "fallback-fixed-thresholds"
+
+    @classmethod
+    def default(cls) -> "SimilarityCalibration":
+        return cls(close=0.6, very_close=0.75, extremely_close=0.9)
+
+    @classmethod
+    def load(cls, path: Path) -> "SimilarityCalibration":
+        fallback = cls.default()
+        if not path.exists():
+            return fallback
+
+        try:
+            payload = json.loads(path.read_text())
+            thresholds = payload.get("thresholds", {})
+            close = float(thresholds["close"])
+            very_close = float(thresholds["very_close"])
+            extremely_close = float(thresholds["extremely_close"])
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            return fallback
+
+        if not (close < very_close < extremely_close):
+            return fallback
+
+        return cls(
+            close=close,
+            very_close=very_close,
+            extremely_close=extremely_close,
+            version=str(payload.get("version", "unknown")),
+        )
+
+
+def closeness_message(
+    similarity: float, calibration: SimilarityCalibration, is_correct: bool = False
+) -> str:
     if is_correct:
         return "Correct!"
-    if similarity > 0.9:
+    if similarity >= calibration.extremely_close:
         return "Extremely close"
-    if similarity > 0.75:
+    if similarity >= calibration.very_close:
         return "Very close"
-    if similarity > 0.6:
+    if similarity >= calibration.close:
         return "Close"
     return "Far"
 
@@ -63,6 +103,7 @@ class AppConfig:
     db_path: Path
     embeddings_path: Path
     neighbors_path: Path
+    calibration_path: Path
     timezone_name: str
     daily_seed: str
 
@@ -76,6 +117,12 @@ class AppConfig:
             ),
             neighbors_path=Path(
                 os.getenv("PROTEOMLE_NEIGHBORS_PATH", root / "data/processed/reviewed_neighbors_top100.npy")
+            ),
+            calibration_path=Path(
+                os.getenv(
+                    "PROTEOMLE_CALIBRATION_PATH",
+                    root / "data/processed/reviewed_similarity_calibration.json",
+                )
             ),
             timezone_name=os.getenv("PROTEOMLE_TIMEZONE", "UTC"),
             daily_seed=os.getenv("PROTEOMLE_DAILY_SEED", "proteomle-reviewed-v1"),
@@ -92,6 +139,7 @@ class GuessResponse(BaseModel):
     protein_id: str
     name: str
     similarity: float
+    similarity_percentile: float
     rank: int | None
     is_top_100: bool
     is_correct: bool
@@ -132,6 +180,7 @@ class ProteinGameData:
     neighbors_top100: np.ndarray
     alias_to_index: dict[str, int]
     alias_count: int
+    similarity_calibration: SimilarityCalibration
 
     @classmethod
     def load(cls, config: AppConfig) -> ProteinGameData:
@@ -150,6 +199,7 @@ class ProteinGameData:
 
         embeddings = np.load(config.embeddings_path, mmap_mode="r")
         neighbors_top100 = np.load(config.neighbors_path, mmap_mode="r")
+        similarity_calibration = SimilarityCalibration.load(config.calibration_path)
 
         num_proteins = len(proteins_df)
         if embeddings.shape[0] != num_proteins:
@@ -202,6 +252,7 @@ class ProteinGameData:
             neighbors_top100=neighbors_top100,
             alias_to_index=alias_to_index,
             alias_count=len(aliases_df),
+            similarity_calibration=similarity_calibration,
         )
 
 
@@ -210,6 +261,7 @@ class ProteinGameService:
         self.config = config
         self.data = data
         self.timezone = ZoneInfo(config.timezone_name)
+        self._sorted_similarity_cache: dict[int, np.ndarray] = {}
 
     @classmethod
     def load(cls) -> ProteinGameService:
@@ -226,6 +278,22 @@ class ProteinGameService:
 
     def target_record_for_date(self, game_date: DateType) -> ProteinRecord:
         return self.data.proteins[self.target_index_for_date(game_date)]
+
+    def sorted_similarities_for_target(self, target_index: int) -> np.ndarray:
+        cached = self._sorted_similarity_cache.get(target_index)
+        if cached is not None:
+            return cached
+
+        target_embedding = self.data.embeddings[target_index]
+        similarities = np.asarray(self.data.embeddings @ target_embedding, dtype=np.float32)
+        sorted_similarities = np.sort(similarities)
+        self._sorted_similarity_cache[target_index] = sorted_similarities
+        return sorted_similarities
+
+    def similarity_percentile(self, target_index: int, similarity: float) -> float:
+        sorted_similarities = self.sorted_similarities_for_target(target_index)
+        position = int(np.searchsorted(sorted_similarities, similarity, side="right"))
+        return (position / sorted_similarities.size) * 100.0
 
     def resolve_guess(self, guess: str) -> int:
         normalized = normalize_query(guess)
@@ -260,6 +328,7 @@ class ProteinGameService:
 
         guess_record = self.data.proteins[guess_index]
         similarity = float(np.dot(self.data.embeddings[guess_index], self.data.embeddings[target_index]))
+        similarity_percentile = self.similarity_percentile(target_index, similarity)
         is_correct = guess_index == target_index
 
         rank: int | None = None
@@ -279,10 +348,15 @@ class ProteinGameService:
             protein_id=guess_record.uniprot_accession,
             name=guess_record.display_name,
             similarity=round(similarity, 6),
+            similarity_percentile=round(similarity_percentile, 2),
             rank=rank,
             is_top_100=is_top_100,
             is_correct=is_correct,
-            message=closeness_message(similarity, is_correct=is_correct),
+            message=closeness_message(
+                similarity,
+                calibration=self.data.similarity_calibration,
+                is_correct=is_correct,
+            ),
             date=resolved_date,
         )
 

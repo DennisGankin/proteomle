@@ -80,6 +80,10 @@ function formatSimilarity(value) {
   return value.toFixed(4);
 }
 
+function formatPercentile(value) {
+  return value.toFixed(1) + "%";
+}
+
 function renderDaily(data) {
   dailyDate.textContent = data.date;
   dailyLength.textContent = String(data.protein_length) + " aa";
@@ -108,10 +112,11 @@ function renderLatest(result) {
     + "<h3>" + result.guess + " " + correctness + "</h3>"
     + "<p>" + result.name + "</p>"
     + "<div class=\"result-meta\">"
-    +   "<span class=\"meta-pill hot\">Similarity " + formatSimilarity(result.similarity) + "</span>"
+    +   "<span class=\"meta-pill hot\">Similarity percentile " + formatPercentile(result.similarity_percentile) + "</span>"
     +   "<span class=\"meta-pill\">" + result.message + "</span>"
     +   rankText
-    + "</div>";
+    + "</div>"
+    + "<p class=\"result-detail\">Cosine similarity " + formatSimilarity(result.similarity) + "</p>";
 }
 
 function renderBestGuess() {
@@ -125,7 +130,8 @@ function renderBestGuess() {
   bestGuessPanel.innerHTML = ""
     + "<strong>" + state.bestGuess.guess + "</strong>"
     + "<span>" + state.bestGuess.name + "</span>"
-    + "<span>Similarity " + formatSimilarity(state.bestGuess.similarity) + " · " + state.bestGuess.message + "</span>";
+    + "<span>" + formatPercentile(state.bestGuess.similarity_percentile) + " · " + state.bestGuess.message + "</span>"
+    + "<span>Cosine similarity " + formatSimilarity(state.bestGuess.similarity) + "</span>";
 }
 
 function renderHistory() {
@@ -148,7 +154,7 @@ function renderHistory() {
       + "<tr>"
       +   "<td><strong>" + item.guess + "</strong></td>"
       +   "<td>" + item.name + "</td>"
-      +   "<td>" + formatSimilarity(item.similarity) + "</td>"
+      +   "<td>" + formatPercentile(item.similarity_percentile) + "</td>"
       +   "<td>" + item.message + "</td>"
       +   "<td>" + rank + "</td>"
       + "</tr>";
@@ -165,10 +171,10 @@ function updateHistory(result) {
 
   state.history.unshift(result);
   state.history.sort(function (a, b) {
-    if (b.similarity === a.similarity) {
+    if (b.similarity_percentile === a.similarity_percentile) {
       return a.guess.localeCompare(b.guess);
     }
-    return b.similarity - a.similarity;
+    return b.similarity_percentile - a.similarity_percentile;
   });
   state.bestGuess = state.history[0] || null;
   renderLatest(result);
