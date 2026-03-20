@@ -8,8 +8,6 @@ const state = {
 
 const dailyDate = document.getElementById("daily-date");
 const dailyLength = document.getElementById("daily-length");
-const dailySize = document.getElementById("daily-size");
-const dailyCategory = document.getElementById("daily-category");
 const guessForm = document.getElementById("guess-form");
 const guessInput = document.getElementById("guess-input");
 const guessButton = document.getElementById("guess-button");
@@ -84,39 +82,92 @@ function formatPercentile(value) {
   return value.toFixed(1) + "%";
 }
 
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, value));
+}
+
+function toneClass(percentile) {
+  if (percentile >= 80) {
+    return "tone-high";
+  }
+  if (percentile >= 45) {
+    return "tone-mid";
+  }
+  return "tone-low";
+}
+
+function rankLabel(result) {
+  if (result.is_correct) {
+    return "Solved";
+  }
+  if (result.is_top_100) {
+    return "#" + result.rank;
+  }
+  return "Outside top 100";
+}
+
+function rankClass(result) {
+  if (result.is_correct || result.is_top_100) {
+    return "good";
+  }
+  return "muted";
+}
+
+function statusBadge(result) {
+  if (result.is_correct) {
+    return '<span class="result-badge hot">Target matched</span>';
+  }
+  if (result.is_top_100) {
+    return '<span class="result-badge good">Top 100</span>';
+  }
+  return '<span class="result-badge muted">Still searching</span>';
+}
+
 function renderDaily(data) {
   dailyDate.textContent = data.date;
   dailyLength.textContent = String(data.protein_length) + " aa";
-  dailySize.textContent = data.dataset_size.toLocaleString();
-  dailyCategory.textContent = data.category || "TBD";
 }
 
 function renderHealth(data) {
   healthState.textContent = "Ready";
-  healthMeta.textContent = data.proteins.toLocaleString() + " proteins loaded · embeddings " + data.embedding_shape[1] + "D";
+  healthMeta.textContent = `${data.proteins.toLocaleString()} proteins loaded · embeddings ${data.embedding_shape[1]}D`;
 }
 
 function renderLatest(result) {
-  let rankText = "<span class=\"meta-pill danger\">Outside top 100</span>";
-  if (result.is_correct) {
-    rankText = "<span class=\"meta-pill good\">Solved the daily protein</span>";
-  } else if (result.is_top_100) {
-    rankText = "<span class=\"meta-pill good\">Top 100 · rank #" + result.rank + "</span>";
-  }
-
-  const correctness = result.is_correct ? "<span class=\"badge correct\">Correct</span>" : "";
+  const width = clampPercent(result.similarity_percentile);
+  const tone = toneClass(result.similarity_percentile);
 
   latestResult.classList.remove("empty");
-  latestResult.innerHTML = ""
-    + "<p class=\"result-kicker\">Latest result</p>"
-    + "<h3>" + result.guess + " " + correctness + "</h3>"
-    + "<p>" + result.name + "</p>"
-    + "<div class=\"result-meta\">"
-    +   "<span class=\"meta-pill hot\">Similarity percentile " + formatPercentile(result.similarity_percentile) + "</span>"
-    +   "<span class=\"meta-pill\">" + result.message + "</span>"
-    +   rankText
-    + "</div>"
-    + "<p class=\"result-detail\">Cosine similarity " + formatSimilarity(result.similarity) + "</p>";
+  latestResult.innerHTML = `
+    <div class="result-shell result-shell-focused">
+      <div class="result-topline">
+        <h2 class="card-title">Current guess</h2>
+        <div class="result-badge-row">
+          ${statusBadge(result)}
+          <span class="result-badge ${rankClass(result)}">${rankLabel(result)}</span>
+        </div>
+      </div>
+      <div class="result-main-text">
+        <h2 class="result-protein-id mono">${result.guess}</h2>
+        <p class="result-name">${result.name}</p>
+      </div>
+      <div class="result-summary-row">
+        <div class="result-closeness result-closeness-${tone}">
+          <span class="result-closeness-dot"></span>
+          <span class="result-message">${result.message}</span>
+        </div>
+        <div class="result-percent-wrap">
+          <span class="result-percent-inline">${formatPercentile(result.similarity_percentile)}</span>
+          <div class="result-bar compact"><span class="bar-fill ${tone}" style="width: ${width}%"></span></div>
+        </div>
+      </div>
+      <div class="result-footnote">
+        <span class="mono">UniProt ${result.protein_id}</span>
+        <span>Cosine ${formatSimilarity(result.similarity)}</span>
+        <span>${result.date}</span>
+      </div>
+    </div>
+  `;
 }
 
 function renderBestGuess() {
@@ -126,38 +177,57 @@ function renderBestGuess() {
     return;
   }
 
+  const best = state.bestGuess;
   bestGuessPanel.className = "best-guess";
-  bestGuessPanel.innerHTML = ""
-    + "<strong>" + state.bestGuess.guess + "</strong>"
-    + "<span>" + state.bestGuess.name + "</span>"
-    + "<span>" + formatPercentile(state.bestGuess.similarity_percentile) + " · " + state.bestGuess.message + "</span>"
-    + "<span>Cosine similarity " + formatSimilarity(state.bestGuess.similarity) + "</span>";
+  bestGuessPanel.innerHTML = `
+    <div class="best-guess-card">
+      <div class="best-guess-header">
+        <div>
+          <strong>${best.guess}</strong>
+          <div class="best-guess-subline">${best.name}</div>
+        </div>
+        <span class="search-status ${rankClass(best)}">${rankLabel(best)}</span>
+      </div>
+      <div class="best-guess-metrics">
+        <div class="metric-card"><span>Percentile</span><strong>${formatPercentile(best.similarity_percentile)}</strong></div>
+        <div class="metric-card"><span>Closeness</span><strong>${best.message}</strong></div>
+        <div class="metric-card"><span>Cosine</span><strong>${formatSimilarity(best.similarity)}</strong></div>
+        <div class="metric-card"><span>UniProt</span><strong>${best.protein_id}</strong></div>
+      </div>
+    </div>
+  `;
 }
 
 function renderHistory() {
   if (state.history.length === 0) {
-    historyBody.innerHTML = "<tr class=\"empty-row\"><td colspan=\"5\">Your guesses will appear here.</td></tr>";
+    historyBody.innerHTML = '<div class="history-empty">Your guesses will appear here.</div>';
     historySummary.textContent = "No guesses submitted yet.";
     return;
   }
 
-  historySummary.textContent = String(state.history.length) + " guess" + (state.history.length === 1 ? "" : "es") + " submitted.";
+  historySummary.textContent = `${state.history.length} guess${state.history.length === 1 ? "" : "es"} submitted.`;
   historyBody.innerHTML = state.history.map(function (item) {
-    let rank = "—";
-    if (item.is_correct) {
-      rank = "<span class=\"badge correct\">Solved</span>";
-    } else if (item.is_top_100) {
-      rank = "<span class=\"badge\">#" + item.rank + "</span>";
-    }
-
-    return ""
-      + "<tr>"
-      +   "<td><strong>" + item.guess + "</strong></td>"
-      +   "<td>" + item.name + "</td>"
-      +   "<td>" + formatPercentile(item.similarity_percentile) + "</td>"
-      +   "<td>" + item.message + "</td>"
-      +   "<td>" + rank + "</td>"
-      + "</tr>";
+    const width = clampPercent(item.similarity_percentile);
+    const tone = toneClass(item.similarity_percentile);
+    return `
+      <article class="history-item">
+        <div class="history-main">
+          <span class="history-rank ${rankClass(item)}">${rankLabel(item)}</span>
+          <div>
+            <strong>${item.guess}</strong>
+            <div class="history-name">${item.name}</div>
+          </div>
+        </div>
+        <div class="history-metrics">
+          <div class="history-score-row">
+            <span class="history-meta">Similarity percentile</span>
+            <strong class="history-percent">${formatPercentile(item.similarity_percentile)}</strong>
+          </div>
+          <div class="history-bar"><span class="bar-fill ${tone}" style="width: ${width}%"></span></div>
+          <div class="history-detail">Cosine similarity ${formatSimilarity(item.similarity)}</div>
+        </div>
+      </article>
+    `;
   }).join("");
 }
 
@@ -192,11 +262,12 @@ function renderSuggestions(items) {
   suggestionsBox.hidden = false;
   suggestionsBox.innerHTML = items.map(function (item) {
     const value = item.gene_symbol || item.protein_id;
-    return ""
-      + "<button type=\"button\" class=\"suggestion-button\" data-value=\"" + value + "\">"
-      +   "<strong>" + value + "</strong>"
-      +   "<span>" + item.name + "</span>"
-      + "</button>";
+    return `
+      <button type="button" class="suggestion-button" data-value="${value}">
+        <strong>${value}</strong>
+        <span>${item.name}</span>
+      </button>
+    `;
   }).join("");
 }
 
@@ -279,7 +350,7 @@ async function requestSuggestions(query) {
 
   state.abortController = new AbortController();
   try {
-    const data = await fetchJson("/autocomplete?q=" + encodeURIComponent(query) + "&limit=6", {
+    const data = await fetchJson(`/autocomplete?q=${encodeURIComponent(query)}&limit=6`, {
       signal: state.abortController.signal,
       timeoutMs: 5000,
     });
