@@ -262,12 +262,36 @@ class ProteinGameService:
         self.data = data
         self.timezone = ZoneInfo(config.timezone_name)
         self._sorted_similarity_cache: dict[int, np.ndarray] = {}
+        self._autocomplete_entries = self._build_autocomplete_entries()
+        self._autocomplete_cache: dict[str, list[AutocompleteItem]] = {}
 
     @classmethod
     def load(cls) -> ProteinGameService:
         config = AppConfig.from_env()
         data = ProteinGameData.load(config)
         return cls(config=config, data=data)
+
+    def _build_autocomplete_entries(
+        self,
+    ) -> list[tuple[ProteinRecord, list[tuple[str, int]]]]:
+        entries: list[tuple[ProteinRecord, list[tuple[str, int]]]] = []
+        for protein in self.data.proteins:
+            candidates: list[tuple[str, int]] = []
+            if protein.gene_symbol:
+                normalized_gene = normalize_query(protein.gene_symbol)
+                if normalized_gene:
+                    candidates.append((normalized_gene, 0))
+
+            normalized_accession = normalize_query(protein.uniprot_accession)
+            if normalized_accession:
+                candidates.append((normalized_accession, 1))
+
+            normalized_name = normalize_query(protein.display_name)
+            if normalized_name:
+                candidates.append((normalized_name, 2))
+
+            entries.append((protein, candidates))
+        return entries
 
     def current_game_date(self) -> DateType:
         return datetime.now(self.timezone).date()
@@ -365,19 +389,14 @@ class ProteinGameService:
         if not normalized:
             return []
 
-        scored: list[tuple[tuple[int, int, int], AutocompleteItem]] = []
-        for protein in self.data.proteins:
-            candidates = []
-            if protein.gene_symbol:
-                candidates.append((protein.gene_symbol, 0))
-            candidates.append((protein.uniprot_accession, 1))
-            candidates.append((protein.display_name, 2))
+        cached = self._autocomplete_cache.get(normalized)
+        if cached is not None:
+            return cached[:limit]
 
+        scored: list[tuple[tuple[int, int, int], AutocompleteItem]] = []
+        for protein, candidates in self._autocomplete_entries:
             best_score: tuple[int, int, int] | None = None
-            for candidate_text, field_priority in candidates:
-                normalized_candidate = normalize_query(candidate_text)
-                if not normalized_candidate:
-                    continue
+            for normalized_candidate, field_priority in candidates:
                 if normalized_candidate == normalized:
                     score = (0, field_priority, protein.protein_index)
                 elif normalized_candidate.startswith(normalized):
@@ -403,7 +422,9 @@ class ProteinGameService:
                 )
 
         scored.sort(key=lambda item: item[0])
-        return [item for _, item in scored[:limit]]
+        matches = [item for _, item in scored[:20]]
+        self._autocomplete_cache[normalized] = matches
+        return matches[:limit]
 
     def health(self) -> HealthResponse:
         return HealthResponse(

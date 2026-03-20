@@ -1,10 +1,17 @@
 const state = {
   history: [],
   bestGuess: null,
-  abortController: null,
+  latestGuess: null,
+  gameDate: null,
+  suggestionController: null,
+  suggestionTimerId: null,
+  latestSuggestionQuery: "",
   guessController: null,
   activeGuessId: 0,
+  isSubmittingGuess: false,
 };
+
+const STORAGE_KEY = "protl-guess-state";
 
 const dailyDate = document.getElementById("daily-date");
 const dailyLength = document.getElementById("daily-length");
@@ -73,6 +80,75 @@ function setFormMessage(message, kind) {
   formMessage.textContent = message || "";
   formMessage.className = "form-message" + (kind ? " " + kind : "");
 }
+function clearPersistedState() {
+  state.history = [];
+  state.bestGuess = null;
+  state.latestGuess = null;
+
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch (error) {
+    console.warn("Could not clear guess history", error);
+  }
+}
+
+function persistState() {
+  try {
+    const payload = {
+      version: 1,
+      date: state.gameDate,
+      history: state.history,
+      latestGuess: state.latestGuess,
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.warn("Could not persist guess history", error);
+  }
+}
+
+function loadPersistedState() {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      state.history = [];
+      state.bestGuess = null;
+      state.latestGuess = null;
+      return false;
+    }
+
+    const payload = JSON.parse(raw);
+    const history = Array.isArray(payload.history) ? payload.history : [];
+    const latestGuess = payload.latestGuess && typeof payload.latestGuess === "object" ? payload.latestGuess : null;
+    state.gameDate = typeof payload.date === "string" ? payload.date : null;
+    state.history = history;
+    state.bestGuess = history[0] || null;
+    state.latestGuess = latestGuess;
+    return history.length > 0;
+  } catch (error) {
+    console.warn("Could not restore guess history", error);
+    state.history = [];
+    state.bestGuess = null;
+    state.latestGuess = null;
+    return false;
+  }
+}
+
+function reconcilePersistedStateWithDate(gameDate) {
+  const savedDate = state.gameDate;
+  state.gameDate = gameDate;
+
+  if (!savedDate || savedDate === gameDate) {
+    return;
+  }
+
+  clearPersistedState();
+  renderBestGuess();
+  renderHistory();
+  latestResult.className = "glass-panel result-spotlight empty";
+  latestResult.innerHTML = '<h2>Current guess</h2><p>Percentile, closeness, cosine similarity, and top-100 rank will show up here.</p>';
+  setFormMessage("New daily puzzle loaded.");
+}
+
 
 function formatSimilarity(value) {
   return value.toFixed(4);
@@ -91,6 +167,16 @@ function toneClass(percentile) {
     return "tone-high";
   }
   if (percentile >= 45) {
+    return "tone-mid";
+  }
+  return "tone-low";
+}
+
+function messageToneClass(message) {
+  if (message === "Extremely close" || message === "Very close" || message === "Correct!") {
+    return "tone-high";
+  }
+  if (message === "Close") {
     return "tone-mid";
   }
   return "tone-low";
@@ -126,6 +212,7 @@ function statusBadge(result) {
 function renderDaily(data) {
   dailyDate.textContent = data.date;
   dailyLength.textContent = String(data.protein_length) + " aa";
+  state.gameDate = data.date;
 }
 
 function renderHealth(data) {
@@ -135,7 +222,7 @@ function renderHealth(data) {
 
 function renderLatest(result) {
   const width = clampPercent(result.similarity_percentile);
-  const tone = toneClass(result.similarity_percentile);
+  const tone = messageToneClass(result.message);
 
   latestResult.classList.remove("empty");
   latestResult.innerHTML = `
@@ -239,6 +326,8 @@ function updateHistory(result) {
     state.history.splice(existingIndex, 1);
   }
 
+  state.gameDate = result.date;
+  state.latestGuess = result;
   state.history.unshift(result);
   state.history.sort(function (a, b) {
     if (b.similarity_percentile === a.similarity_percentile) {
@@ -247,6 +336,7 @@ function updateHistory(result) {
     return b.similarity_percentile - a.similarity_percentile;
   });
   state.bestGuess = state.history[0] || null;
+  persistState();
   renderLatest(result);
   renderBestGuess();
   renderHistory();
@@ -277,7 +367,7 @@ async function loadDaily() {
 }
 
 async function loadHealth() {
-  const data = await fetchJson("/health", { timeoutMs: 10000 });
+  const data = await fetchJson("/health", { timeoutMs: 3000 });
   renderHealth(data);
 }
 
@@ -288,6 +378,17 @@ async function submitGuess(rawGuess) {
     return;
   }
 
+  if (state.suggestionTimerId !== null) {
+    window.clearTimeout(state.suggestionTimerId);
+    state.suggestionTimerId = null;
+  }
+  if (state.suggestionController) {
+    state.suggestionController.abort();
+    state.suggestionController = null;
+  }
+  state.latestSuggestionQuery = "";
+  renderSuggestions([]);
+
   if (state.guessController) {
     state.guessController.abort();
   }
@@ -295,6 +396,7 @@ async function submitGuess(rawGuess) {
   state.activeGuessId += 1;
   const guessId = state.activeGuessId;
   state.guessController = new AbortController();
+  state.isSubmittingGuess = true;
 
   guessButton.disabled = true;
   setFormMessage("Scoring your guess...");
@@ -332,6 +434,7 @@ async function submitGuess(rawGuess) {
     renderSuggestions(detail.suggestions || []);
   } finally {
     if (guessId === state.activeGuessId) {
+      state.isSubmittingGuess = false;
       state.guessController = null;
       guessButton.disabled = false;
       guessInput.focus();
@@ -340,26 +443,44 @@ async function submitGuess(rawGuess) {
 }
 
 async function requestSuggestions(query) {
-  if (state.abortController) {
-    state.abortController.abort();
+  const trimmed = query.trim();
+  if (state.isSubmittingGuess) {
+    return;
   }
-  if (query.trim() === "") {
+  if (trimmed === "" || trimmed.length < 2) {
+    if (state.suggestionController) {
+      state.suggestionController.abort();
+      state.suggestionController = null;
+    }
+    state.latestSuggestionQuery = "";
     renderSuggestions([]);
     return;
   }
 
-  state.abortController = new AbortController();
+  if (state.suggestionController) {
+    state.suggestionController.abort();
+  }
+
+  state.latestSuggestionQuery = trimmed;
+  state.suggestionController = new AbortController();
   try {
-    const data = await fetchJson(`/autocomplete?q=${encodeURIComponent(query)}&limit=6`, {
-      signal: state.abortController.signal,
+    const data = await fetchJson(`/autocomplete?q=${encodeURIComponent(trimmed)}&limit=6`, {
+      signal: state.suggestionController.signal,
       timeoutMs: 5000,
     });
+    if (state.latestSuggestionQuery !== trimmed || state.isSubmittingGuess) {
+      return;
+    }
     renderSuggestions(data.suggestions);
   } catch (error) {
     if (error.name === "AbortError") {
       return;
     }
     renderSuggestions([]);
+  } finally {
+    if (state.latestSuggestionQuery === trimmed) {
+      state.suggestionController = null;
+    }
   }
 }
 
@@ -368,8 +489,15 @@ guessForm.addEventListener("submit", async function (event) {
   await submitGuess(guessInput.value);
 });
 
-guessInput.addEventListener("input", async function (event) {
-  await requestSuggestions(event.target.value);
+guessInput.addEventListener("input", function (event) {
+  const value = event.target.value;
+  if (state.suggestionTimerId !== null) {
+    window.clearTimeout(state.suggestionTimerId);
+  }
+  state.suggestionTimerId = window.setTimeout(function () {
+    state.suggestionTimerId = null;
+    requestSuggestions(value);
+  }, 250);
 });
 
 document.addEventListener("click", function (event) {
@@ -387,14 +515,31 @@ document.addEventListener("click", function (event) {
 });
 
 window.addEventListener("DOMContentLoaded", async function () {
-  try {
-    await Promise.all([loadDaily(), loadHealth()]);
-    setFormMessage("Backend connected. Start guessing.");
-  } catch (error) {
+  const restored = loadPersistedState();
+  if (restored && state.latestGuess) {
+    renderLatest(state.latestGuess);
+    renderBestGuess();
+    renderHistory();
+    setFormMessage("Restored saved guesses.");
+  } else {
+    renderBestGuess();
+    renderHistory();
+  }
+
+  loadHealth().catch(function () {
     healthState.textContent = "Unavailable";
     healthMeta.textContent = "Could not reach the backend.";
-    setFormMessage("The backend did not respond. Check the server logs.", "error");
+  });
+
+  try {
+    await loadDaily();
+    reconcilePersistedStateWithDate(state.gameDate);
+    if (!restored || !state.latestGuess) {
+      setFormMessage("Backend connected. Start guessing.");
+    }
+  } catch (error) {
+    if (!restored) {
+      setFormMessage("The backend did not respond. Check the server logs.", "error");
+    }
   }
-  renderBestGuess();
-  renderHistory();
 });
