@@ -1,0 +1,359 @@
+:root {
+  --bg: #f4efe2;
+  --panel: rgba(255, 250, 240, 0.88);
+  --panel-strong: #fff9ee;
+  --ink: #1b281f;
+  --muted: #5b655d;
+  --line: rgba(27, 40, 31, 0.12);
+  --accent: #1f7a59;
+  --accent-soft: #d7f3e7;
+  --warm: #ef8f3f;
+  --warm-soft: #ffe0c4;
+  --danger: #a63d40;
+  --shadow: 0 18px 50px rgba(37, 44, 31, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: "Avenir Next", "Trebuchet MS", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(239, 143, 63, 0.2), transparent 28%),
+    radial-gradient(circle at top right, rgba(31, 122, 89, 0.18), transparent 24%),
+    linear-gradient(180deg, #f5f0e5 0%, #f0e5d3 100%);
+}
+
+code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  background: rgba(27, 40, 31, 0.08);
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+}
+
+.page-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 40px 0 56px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 24px;
+  align-items: stretch;
+  margin-bottom: 24px;
+}
+
+.hero-copy,
+.panel,
+.hero-card {
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
+}
+
+.hero-copy {
+  padding: 30px;
+}
+
+.eyebrow,
+.card-label,
+.result-kicker {
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.hero h1 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.4rem, 5vw, 4.5rem);
+  line-height: 0.98;
+  max-width: 11ch;
+}
+
+.hero-text {
+  margin: 16px 0 0;
+  max-width: 62ch;
+  font-size: 1.02rem;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.hero-card {
+  padding: 24px;
+  background: linear-gradient(145deg, rgba(31, 122, 89, 0.1), rgba(255, 249, 238, 0.95));
+}
+
+.daily-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 14px;
+}
+
+.daily-grid span,
+.api-status span,
+.best-guess span,
+.form-message {
+  color: var(--muted);
+}
+
+.daily-grid strong,
+.api-status strong,
+.best-guess strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1.08rem;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.9fr);
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.panel {
+  padding: 24px;
+}
+
+.stack {
+  display: grid;
+  gap: 24px;
+}
+
+.panel-head h2 {
+  margin: 0 0 6px;
+  font-size: 1.5rem;
+}
+
+.panel-head p,
+.history-head p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.guess-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  margin: 20px 0 10px;
+}
+
+.input-shell {
+  position: relative;
+}
+
+#guess-input {
+  width: 100%;
+  border: 1px solid rgba(27, 40, 31, 0.12);
+  border-radius: 20px;
+  padding: 16px 18px;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--ink);
+  background: var(--panel-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+#guess-input:focus {
+  outline: 2px solid rgba(31, 122, 89, 0.25);
+  border-color: var(--accent);
+}
+
+#guess-button {
+  border: 0;
+  border-radius: 20px;
+  padding: 0 22px;
+  min-height: 56px;
+  font: inherit;
+  font-weight: 700;
+  color: white;
+  background: linear-gradient(135deg, var(--accent), #125941);
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+  box-shadow: 0 10px 20px rgba(18, 89, 65, 0.18);
+}
+
+#guess-button:hover {
+  transform: translateY(-1px);
+}
+
+#guess-button:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.suggestions {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.suggestion-button {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px 14px;
+  font: inherit;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+}
+
+.suggestion-button strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.result-card {
+  margin-top: 20px;
+  border-radius: 24px;
+  padding: 22px;
+  background: linear-gradient(145deg, rgba(31, 122, 89, 0.1), rgba(255, 255, 255, 0.7));
+  border: 1px solid rgba(31, 122, 89, 0.12);
+}
+
+.result-card h3 {
+  margin: 0 0 10px;
+  font-size: 1.45rem;
+}
+
+.result-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.result-card.empty,
+.best-guess.empty {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.meta-pill {
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(27, 40, 31, 0.08);
+  font-size: 0.92rem;
+}
+
+.meta-pill.good {
+  background: var(--accent-soft);
+  color: #0b5137;
+}
+
+.meta-pill.hot {
+  background: var(--warm-soft);
+  color: #8a4b17;
+}
+
+.meta-pill.danger {
+  background: rgba(166, 61, 64, 0.14);
+  color: var(--danger);
+}
+
+.history-panel {
+  overflow: hidden;
+}
+
+.history-table-wrap {
+  overflow-x: auto;
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 18px;
+}
+
+.history-table th,
+.history-table td {
+  padding: 14px 12px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.history-table th {
+  color: var(--muted);
+  font-size: 0.86rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.history-table tbody tr {
+  transition: background 120ms ease;
+}
+
+.history-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.empty-row td {
+  color: var(--muted);
+  text-align: center;
+}
+
+.badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.28rem 0.62rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: var(--accent-soft);
+  color: #0f533b;
+}
+
+.badge.correct {
+  background: rgba(239, 143, 63, 0.18);
+  color: #7f4a1c;
+}
+
+.form-message {
+  min-height: 24px;
+  margin: 8px 2px 0;
+}
+
+.form-message.error {
+  color: var(--danger);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+@media (max-width: 900px) {
+  .hero,
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .guess-form {
+    grid-template-columns: 1fr;
+  }
+
+  #guess-button {
+    min-height: 52px;
+  }
+}

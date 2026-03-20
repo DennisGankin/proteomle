@@ -1,0 +1,114 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Protein Guessing Game</title>
+    <link rel="stylesheet" href="/static/styles.css?v=5" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Proteomle</p>
+          <h1>Guess the hidden human protein.</h1>
+          <p class="hero-text">
+            Enter a UniProt accession, gene symbol, or protein name. Every guess comes back with a cosine similarity score,
+            a closeness hint, and a top-100 rank when you hit the inner circle.
+          </p>
+        </div>
+        <div class="hero-card" id="daily-card">
+          <p class="card-label">Daily clue</p>
+          <div class="daily-grid">
+            <div>
+              <span>Date</span>
+              <strong id="daily-date">...</strong>
+            </div>
+            <div>
+              <span>Length</span>
+              <strong id="daily-length">...</strong>
+            </div>
+            <div>
+              <span>Dataset</span>
+              <strong id="daily-size">...</strong>
+            </div>
+            <div>
+              <span>Category</span>
+              <strong id="daily-category">TBD</strong>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="panel guess-panel">
+          <div class="panel-head">
+            <h2>Make a guess</h2>
+            <p>Try a symbol like <code>TP53</code> or an accession like <code>P04637</code>.</p>
+          </div>
+
+          <form id="guess-form" class="guess-form" autocomplete="off">
+            <label class="input-shell">
+              <span class="sr-only">Protein guess</span>
+              <input id="guess-input" name="guess" type="text" placeholder="Start typing a protein..." required />
+            </label>
+            <button type="submit" id="guess-button">Submit guess</button>
+          </form>
+
+          <div id="suggestions" class="suggestions" hidden></div>
+          <p id="form-message" class="form-message" aria-live="polite"></p>
+
+          <div id="latest-result" class="result-card empty">
+            <p class="result-kicker">Latest result</p>
+            <h3>Waiting for your first guess</h3>
+            <p>Similarity, closeness, and rank feedback will show up here.</p>
+          </div>
+        </section>
+
+        <aside class="stack">
+          <section class="panel stat-panel">
+            <p class="card-label">Closest guess so far</p>
+            <div id="best-guess" class="best-guess empty">
+              <strong>No guesses yet</strong>
+              <span>Start exploring the embedding space.</span>
+            </div>
+          </section>
+
+          <section class="panel stat-panel">
+            <p class="card-label">API status</p>
+            <div class="api-status">
+              <strong id="health-state">Checking...</strong>
+              <span id="health-meta">Loading dataset information.</span>
+            </div>
+          </section>
+        </aside>
+      </main>
+
+      <section class="panel history-panel">
+        <div class="panel-head history-head">
+          <h2>Guess history</h2>
+          <p id="history-summary">No guesses submitted yet.</p>
+        </div>
+        <div class="history-table-wrap">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Guess</th>
+                <th>Name</th>
+                <th>Similarity</th>
+                <th>Message</th>
+                <th>Rank</th>
+              </tr>
+            </thead>
+            <tbody id="history-body">
+              <tr class="empty-row">
+                <td colspan="5">Your guesses will appear here.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <script src="/static/app.js?v=5" defer></script>
+  </body>
+</html>
