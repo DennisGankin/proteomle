@@ -424,7 +424,7 @@ async function submitGuess(rawGuess) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ guess: guess }),
       signal: state.guessController.signal,
-      timeoutMs: 30000,
+      timeoutMs: 5000,
     });
 
     if (guessId !== state.activeGuessId) {
