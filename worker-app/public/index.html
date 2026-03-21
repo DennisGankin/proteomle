@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Protl - Daily Protein Guesser</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css?v=28" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="masthead">
+        <h1>Protl - Daily Protein Guesser</h1>
+        <p class="masthead-copy">
+          Enter a UniProt accession, gene symbol, or protein name. Every guess comes back with a
+          target-relative similarity percentile, a closeness hint, and a top-100 rank when you hit the inner circle.
+        </p>
+      </header>
+
+      <main class="dashboard">
+        <section class="top-grid">
+          <section class="glass-panel search-panel guess-panel">
+            <div class="panel-intro search-intro">
+              <h2>Make a guess</h2>
+              <p>Try a symbol like <code>TP53</code> or an accession like <code>P04637</code>.</p>
+            </div>
+
+            <form id="guess-form" class="guess-form" autocomplete="off">
+              <label class="search-shell input-shell">
+                <span class="search-icon" aria-hidden="true">⌕</span>
+                <span class="sr-only">Protein guess</span>
+                <input id="guess-input" name="guess" type="text" placeholder="Search for a human protein..." required />
+                <span class="search-hint">ENTER</span>
+              </label>
+              <button type="submit" id="guess-button">Submit guess</button>
+            </form>
+
+            <div id="suggestions" class="suggestions" hidden></div>
+            <p id="form-message" class="form-message" aria-live="polite"></p>
+          </section>
+
+          <section class="glass-panel daily-panel" id="daily-card">
+            <div class="panel-intro compact">
+              <h2>Today's clue</h2>
+            </div>
+            <div class="daily-grid daily-grid-simple">
+              <div class="stat-block">
+                <span>Date</span>
+                <strong id="daily-date">...</strong>
+              </div>
+              <div class="stat-block">
+                <span>Amino acids</span>
+                <strong id="daily-length">...</strong>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="insight-grid">
+          <section id="latest-result" class="glass-panel result-spotlight empty">
+            <h2>Current guess</h2>
+            <p>Percentile, closeness, cosine similarity, and top-100 rank will show up here.</p>
+          </section>
+
+          <section class="glass-panel stat-panel best-panel">
+            <div class="panel-intro compact">
+              <h2>Closest guess so far</h2>
+            </div>
+            <div id="best-guess" class="best-guess empty">
+              <strong>No guesses yet</strong>
+              <span>Start exploring the embedding space.</span>
+            </div>
+          </section>
+        </section>
+
+        <section class="glass-panel history-shell">
+          <div class="history-head">
+            <h2>Guess history</h2>
+            <p id="history-summary">No guesses submitted yet.</p>
+          </div>
+          <div id="history-body" class="history-list">
+            <div class="history-empty">Your guesses will appear here.</div>
+          </div>
+        </section>
+
+        <section class="glass-panel system-panel">
+          <div class="panel-intro compact">
+            <h2>API status</h2>
+          </div>
+          <div class="api-status">
+            <strong id="health-state">Checking...</strong>
+            <span id="health-meta">Loading dataset information.</span>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js?v=28" defer></script>
+  </body>
+</html>
