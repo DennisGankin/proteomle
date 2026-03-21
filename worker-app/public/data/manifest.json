@@ -1,0 +1,1 @@
+{"version":"worker-reviewed-v1","proteins":19113,"dimension":1280,"alias_count":100817,"alias_shard_width":2,"embeddings_file":"embeddings.i8.bin","neighbors_file":"neighbors.i16.bin","proteins_file":"proteins.json"}
