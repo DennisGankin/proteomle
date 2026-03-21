@@ -76,9 +76,18 @@ code {
 }
 
 .masthead {
-  max-width: 760px;
-  margin: 0 auto 18px;
-  text-align: center;
+  margin: 0 0 18px;
+}
+
+.masthead-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 430px);
+  gap: 28px;
+  align-items: center;
+}
+
+.masthead-copy-block {
+  max-width: 640px;
 }
 
 .eyebrow {
@@ -91,18 +100,53 @@ code {
 }
 
 .masthead h1 {
-  margin: 0;
   font-size: clamp(2.6rem, 7vw, 4.4rem);
   line-height: 0.96;
   letter-spacing: -0.08em;
 }
 
+.masthead-subtitle {
+  margin: 0;
+  font-size: clamp(1.7rem, 3.2vw, 2.35rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
 .masthead-copy {
-  margin: 12px auto 0;
+  margin: 12px 0 0;
   max-width: 58ch;
   font-size: 0.96rem;
   line-height: 1.6;
   color: var(--muted);
+}
+
+.masthead-structure {
+  display: grid;
+  align-items: stretch;
+}
+
+.structure-viewer-shell {
+  position: relative;
+}
+
+#structure-length-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 68px;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(22, 27, 24, 0.06);
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 0.74rem;
+  color: var(--ink);
+}
+
+.structure-length-overlay {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
 }
 
 .dashboard {
@@ -307,7 +351,7 @@ code {
 
 .meta-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-top: 2px;
   padding-top: 6px;
@@ -675,6 +719,40 @@ code {
   padding-block: 16px;
 }
 
+.structure-viewer {
+  position: relative;
+  min-height: 360px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.structure-viewer canvas {
+  background: transparent !important;
+}
+
+.structure-viewer > div,
+.structure-viewer > div > div {
+  background: transparent !important;
+}
+
+.structure-viewer-hero {
+  min-height: 320px;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.structure-empty {
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
 .embedding-copy {
   position: relative;
   z-index: 1;
@@ -847,6 +925,11 @@ code {
     grid-template-columns: 1fr;
   }
 
+  .masthead-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
   .result-summary-row,
   .result-topline,
   .history-head {
@@ -897,5 +980,10 @@ code {
 
   .search-hint {
     display: none;
+  }
+
+  .structure-viewer,
+  .structure-empty {
+    min-height: 280px;
   }
 }

@@ -15,7 +15,6 @@ const state = {
 const STORAGE_KEY = "protl-guess-state";
 
 const dailyDate = document.getElementById("daily-date");
-const dailyLength = document.getElementById("daily-length");
 const guessForm = document.getElementById("guess-form");
 const guessInput = document.getElementById("guess-input");
 const guessButton = document.getElementById("guess-button");
@@ -28,11 +27,15 @@ const healthMeta = document.getElementById("health-meta");
 const embeddingMeta = document.getElementById("embedding-meta");
 const historyBody = document.getElementById("history-body");
 const historySummary = document.getElementById("history-summary");
+const structureLengthBadge = document.getElementById("structure-length-badge");
+const structureViewer = document.getElementById("structure-viewer");
 const winModal = document.getElementById("win-modal");
 const winTitle = document.getElementById("win-title");
 const winSubtitle = document.getElementById("win-subtitle");
 const winTries = document.getElementById("win-tries");
 const winChart = document.getElementById("win-chart");
+let structureViewerInstance = null;
+let threeDMolPromise = null;
 
 async function fetchJson(url, options) {
   const requestOptions = Object.assign({ cache: "no-store" }, options || {});
@@ -304,7 +307,9 @@ function statusBadge(result) {
 
 function renderDaily(data) {
   dailyDate.textContent = data.date;
-  dailyLength.textContent = String(data.protein_length) + " aa";
+  if (structureLengthBadge) {
+    structureLengthBadge.textContent = `Sequence length: ${data.protein_length} aa`;
+  }
   state.gameDate = data.date;
 }
 
@@ -313,6 +318,79 @@ function renderHealth(data) {
   healthMeta.textContent = `${data.proteins.toLocaleString()} reviewed proteins loaded locally.`;
   if (embeddingMeta) {
     embeddingMeta.innerHTML = `Similarity is computed from cosine similarity over ${data.embedding_shape[1]}D <a href="https://github.com/facebookresearch/esm" target="_blank" rel="noreferrer">ESM-2</a> embeddings sourced from the <a href="https://deepdrug-dpeb.s3.us-west-2.amazonaws.com/ESM-2/ProteinID_proteinSEQ_ESM_emb.csv" target="_blank" rel="noreferrer">DPEB aggregated release</a>.`;
+  }
+}
+
+function forceTransparentStructureViewer() {
+  if (!structureViewer) {
+    return;
+  }
+  Array.from(structureViewer.querySelectorAll("canvas, div")).forEach(function (element) {
+    element.style.backgroundColor = "transparent";
+  });
+}
+
+function ensureThreeDMol() {
+  if (window.$3Dmol) {
+    return Promise.resolve(window.$3Dmol);
+  }
+  if (!threeDMolPromise) {
+    threeDMolPromise = new Promise(function (resolve, reject) {
+      let attempts = 0;
+      const maxAttempts = 80;
+
+      function check() {
+        if (window.$3Dmol) {
+          resolve(window.$3Dmol);
+          return;
+        }
+        attempts += 1;
+        if (attempts >= maxAttempts) {
+          reject(new Error("3Dmol failed to load."));
+          return;
+        }
+        window.setTimeout(check, 100);
+      }
+
+      check();
+    });
+  }
+  return threeDMolPromise;
+}
+
+async function loadDailyStructure() {
+  if (!structureViewer || !state.gameDate) {
+    return;
+  }
+
+  structureViewer.innerHTML = "";
+
+  try {
+    const pdbText = await fetchJson(`/daily-structure?day=${encodeURIComponent(state.gameDate)}`, {
+      timeoutMs: 25000,
+    });
+    if (typeof pdbText !== "string" || pdbText.trim() === "") {
+      throw new Error("Structure unavailable.");
+    }
+
+    const $3Dmol = await ensureThreeDMol();
+    structureViewerInstance = $3Dmol.createViewer(structureViewer, {
+      backgroundColor: "white",
+      backgroundAlpha: 0,
+      alpha: true,
+      premultipliedAlpha: false,
+      antialias: true,
+    });
+    structureViewerInstance.setBackgroundColor(0x000000, 0);
+    structureViewerInstance.addModel(pdbText, "pdb");
+    structureViewerInstance.setStyle({}, { cartoon: { color: "spectrum" } });
+    structureViewerInstance.zoomTo();
+    structureViewerInstance.zoom(1.22);
+    structureViewerInstance.render();
+    forceTransparentStructureViewer();
+  } catch (error) {
+    console.error("Could not load daily structure", error);
+    structureViewer.innerHTML = '<div class="structure-empty">No structure could be loaded for today.</div>';
   }
 }
 
@@ -767,6 +845,9 @@ window.addEventListener("DOMContentLoaded", async function () {
   try {
     await loadDaily();
     reconcilePersistedStateWithDate(state.gameDate);
+    loadDailyStructure().catch(function () {
+      structureViewer.innerHTML = '<div class="structure-empty">No structure could be loaded for today.</div>';
+    });
     if (!restored || !state.latestGuess) {
       setFormMessage("Ready when you are.");
     }

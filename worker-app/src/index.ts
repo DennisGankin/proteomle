@@ -47,6 +47,12 @@ type GuessResponse = {
   date: string;
 };
 
+type AlphaFoldPrediction = {
+  pdbUrl?: string;
+  sequenceStart?: number;
+  sequenceEnd?: number;
+};
+
 const datasetCache: {
   manifest?: Promise<Manifest>;
   proteins?: Promise<ProteinTable>;
@@ -68,6 +74,16 @@ function jsonResponse(payload: unknown, status = 200): Response {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+
+function textResponse(payload: string, status = 200, contentType = "text/plain; charset=utf-8"): Response {
+  return new Response(payload, {
+    status,
+    headers: {
+      "content-type": contentType,
       "cache-control": "no-store",
     },
   });
@@ -358,6 +374,58 @@ async function dailySummary(env: Env, request: Request, gameDate: string): Promi
   });
 }
 
+function sanitizePdb(pdbText: string): string {
+  const allowedPrefixes = ["ATOM  ", "HETATM", "ANISOU", "CONECT", "TER", "MODEL ", "ENDMDL"];
+  const lines = pdbText.split(/\r?\n/).filter((line) => {
+    return allowedPrefixes.some((prefix) => line.startsWith(prefix));
+  });
+  if (lines.length === 0) {
+    return "";
+  }
+  if (lines[lines.length - 1] !== "END") {
+    lines.push("END");
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+async function dailyStructure(env: Env, request: Request, gameDate: string): Promise<Response> {
+  const manifest = await getManifest(env, request);
+  const proteins = await getProteins(env, request);
+  const seed = env.DAILY_SEED || "proteomle-reviewed-v1";
+  const targetIndex = await targetIndexForDate(seed, gameDate, manifest.proteins);
+  const accession = proteins.ids[targetIndex];
+
+  const predictionResponse = await fetch(`https://alphafold.ebi.ac.uk/api/prediction/${encodeURIComponent(accession)}`);
+  if (!predictionResponse.ok) {
+    return textResponse("Structure unavailable.", 404);
+  }
+
+  const predictions = (await predictionResponse.json()) as AlphaFoldPrediction[];
+  if (!Array.isArray(predictions) || predictions.length === 0) {
+    return textResponse("Structure unavailable.", 404);
+  }
+
+  const selectedPrediction = predictions
+    .slice()
+    .sort((left, right) => (left.sequenceStart ?? 0) - (right.sequenceStart ?? 0))[0];
+
+  if (!selectedPrediction.pdbUrl) {
+    return textResponse("Structure unavailable.", 404);
+  }
+
+  const pdbResponse = await fetch(selectedPrediction.pdbUrl);
+  if (!pdbResponse.ok) {
+    return textResponse("Structure unavailable.", 404);
+  }
+
+  const sanitizedPdb = sanitizePdb(await pdbResponse.text());
+  if (!sanitizedPdb) {
+    return textResponse("Structure unavailable.", 404);
+  }
+
+  return textResponse(sanitizedPdb);
+}
+
 async function health(env: Env, request: Request): Promise<Response> {
   const manifest = await getManifest(env, request);
   return jsonResponse({
@@ -432,6 +500,10 @@ export default {
       if (request.method === "GET" && url.pathname === "/daily") {
         const gameDate = parseGameDate(url, env.TIMEZONE || "UTC");
         return await dailySummary(env, request, gameDate);
+      }
+      if (request.method === "GET" && url.pathname === "/daily-structure") {
+        const gameDate = parseGameDate(url, env.TIMEZONE || "UTC");
+        return await dailyStructure(env, request, gameDate);
       }
       if (request.method === "POST" && url.pathname === "/guess") {
         return await guess(env, request);

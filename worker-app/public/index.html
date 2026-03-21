@@ -10,15 +10,26 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=30" />
+    <link rel="stylesheet" href="/styles.css?v=31" />
   </head>
   <body>
     <div class="app-shell">
       <header class="masthead">
-        <h1>Protle - Daily Protein Guesser</h1>
-        <p class="masthead-copy">
-          Guess today&apos;s protein and navigate through the protein embedding space. The similarity score is based on cosine similarity between ESM embeddings.
-        </p>
+        <div class="masthead-grid">
+          <div class="masthead-copy-block">
+            <h1>Protle</h1>
+            <h2 class="masthead-subtitle">Daily Protein Guesser</h2>
+            <p class="masthead-copy">
+              Guess today&apos;s protein and navigate through the protein embedding space. The similarity score is based on cosine similarity between ESM embedding.
+            </p>
+          </div>
+          <div class="masthead-structure">
+            <div class="structure-viewer-shell">
+              <div id="structure-viewer" class="structure-viewer structure-viewer-hero" aria-label="Daily protein structure"></div>
+              <span id="structure-length-badge" class="structure-length-overlay">Sequence length: ... aa</span>
+            </div>
+          </div>
+        </div>
       </header>
 
       <main class="dashboard">
@@ -53,10 +64,6 @@
               <div class="meta-card">
                 <span>Daily puzzle</span>
                 <strong id="daily-date">...</strong>
-              </div>
-              <div class="meta-card">
-                <span>Sequence length</span>
-                <strong id="daily-length">...</strong>
               </div>
               <div class="meta-card meta-card-status">
                 <span>Service</span>
@@ -98,6 +105,7 @@
       </main>
     </div>
 
+    <script src="https://3dmol.org/build/3Dmol-min.js" defer></script>
     <div id="win-modal" class="win-modal" hidden>
       <div class="win-modal-backdrop" data-win-dismiss></div>
       <section class="win-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="win-title">
@@ -117,6 +125,6 @@
       </section>
     </div>
 
-    <script src="/app.js?v=30" defer></script>
+    <script src="/app.js?v=31" defer></script>
   </body>
 </html>
