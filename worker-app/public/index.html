@@ -3,78 +3,72 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Protl - Daily Protein Guesser</title>
+    <title>Protle - Daily Protein Guesser</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=28" />
+    <link rel="stylesheet" href="/styles.css?v=30" />
   </head>
   <body>
     <div class="app-shell">
       <header class="masthead">
-        <h1>Protl - Daily Protein Guesser</h1>
+        <h1>Protle - Daily Protein Guesser</h1>
         <p class="masthead-copy">
-          Enter a UniProt accession, gene symbol, or protein name. Every guess comes back with a
-          target-relative similarity percentile, a closeness hint, and a top-100 rank when you hit the inner circle.
+          Guess today&apos;s protein and navigate through the protein embedding space. The similarity score is based on cosine similarity between ESM embeddings.
         </p>
       </header>
 
       <main class="dashboard">
-        <section class="top-grid">
-          <section class="glass-panel search-panel guess-panel">
+        <section class="focus-grid">
+          <section class="glass-panel guess-panel">
             <div class="panel-intro search-intro">
-              <h2>Make a guess</h2>
-              <p>Try a symbol like <code>TP53</code> or an accession like <code>P04637</code>.</p>
+              <div>
+                <h2>Make a guess</h2>
+                <p>Enter a UniProt accession, gene symbol, or protein name.</p>
+              </div>
             </div>
 
             <form id="guess-form" class="guess-form" autocomplete="off">
               <label class="search-shell input-shell">
-                <span class="search-icon" aria-hidden="true">⌕</span>
+                <span class="search-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <circle cx="11" cy="11" r="6.5"></circle>
+                    <path d="M16 16l4.5 4.5"></path>
+                  </svg>
+                </span>
                 <span class="sr-only">Protein guess</span>
-                <input id="guess-input" name="guess" type="text" placeholder="Search for a human protein..." required />
+                <input id="guess-input" name="guess" type="text" placeholder="Search a protein, gene, or UniProt ID" required />
                 <span class="search-hint">ENTER</span>
               </label>
-              <button type="submit" id="guess-button">Submit guess</button>
+              <button type="submit" id="guess-button">Score guess</button>
             </form>
 
             <div id="suggestions" class="suggestions" hidden></div>
             <p id="form-message" class="form-message" aria-live="polite"></p>
-          </section>
 
-          <section class="glass-panel daily-panel" id="daily-card">
-            <div class="panel-intro compact">
-              <h2>Today's clue</h2>
-            </div>
-            <div class="daily-grid daily-grid-simple">
-              <div class="stat-block">
-                <span>Date</span>
+            <div class="meta-strip">
+              <div class="meta-card">
+                <span>Daily puzzle</span>
                 <strong id="daily-date">...</strong>
               </div>
-              <div class="stat-block">
-                <span>Amino acids</span>
+              <div class="meta-card">
+                <span>Sequence length</span>
                 <strong id="daily-length">...</strong>
+              </div>
+              <div class="meta-card meta-card-status">
+                <span>Service</span>
+                <strong id="health-state">Checking...</strong>
+                <em id="health-meta">Loading dataset information.</em>
               </div>
             </div>
           </section>
-        </section>
 
-        <section class="insight-grid">
           <section id="latest-result" class="glass-panel result-spotlight empty">
             <h2>Current guess</h2>
-            <p>Percentile, closeness, cosine similarity, and top-100 rank will show up here.</p>
-          </section>
-
-          <section class="glass-panel stat-panel best-panel">
-            <div class="panel-intro compact">
-              <h2>Closest guess so far</h2>
-            </div>
-            <div id="best-guess" class="best-guess empty">
-              <strong>No guesses yet</strong>
-              <span>Start exploring the embedding space.</span>
-            </div>
+            <p>Percentile, closeness, cosine similarity, and rank will appear here after each guess.</p>
           </section>
         </section>
 
@@ -83,23 +77,46 @@
             <h2>Guess history</h2>
             <p id="history-summary">No guesses submitted yet.</p>
           </div>
+          <div class="history-table-head" aria-hidden="true">
+            <span>Guess</span>
+            <span>Rank</span>
+            <span>Protein</span>
+            <span>Percentile</span>
+            <span>Cosine</span>
+          </div>
           <div id="history-body" class="history-list">
             <div class="history-empty">Your guesses will appear here.</div>
           </div>
         </section>
 
-        <section class="glass-panel system-panel">
-          <div class="panel-intro compact">
-            <h2>API status</h2>
-          </div>
-          <div class="api-status">
-            <strong id="health-state">Checking...</strong>
-            <span id="health-meta">Loading dataset information.</span>
+        <section class="glass-panel embedding-panel">
+          <div class="embedding-copy">
+            <p class="eyebrow">Embedding Space</p>
+            <p id="embedding-meta" class="embedding-meta">Loading embedding details.</p>
           </div>
         </section>
       </main>
     </div>
 
-    <script src="/app.js?v=28" defer></script>
+    <div id="win-modal" class="win-modal" hidden>
+      <div class="win-modal-backdrop" data-win-dismiss></div>
+      <section class="win-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="win-title">
+        <button type="button" class="win-modal-close" data-win-dismiss aria-label="Close">×</button>
+        <p class="eyebrow">Puzzle Solved</p>
+        <h2 id="win-title">Congrats, target protein found.</h2>
+        <p id="win-subtitle" class="win-subtitle"></p>
+        <div class="win-stats">
+          <div class="win-stat">
+            <span>Unique guesses</span>
+            <strong id="win-tries">0</strong>
+          </div>
+        </div>
+        <div class="win-chart-shell">
+          <div id="win-chart" class="win-chart"></div>
+        </div>
+      </section>
+    </div>
+
+    <script src="/app.js?v=30" defer></script>
   </body>
 </html>

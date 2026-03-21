@@ -3,6 +3,7 @@ const state = {
   bestGuess: null,
   latestGuess: null,
   gameDate: null,
+  nextGuessNumber: 1,
   suggestionController: null,
   suggestionTimerId: null,
   latestSuggestionQuery: "",
@@ -24,8 +25,14 @@ const latestResult = document.getElementById("latest-result");
 const bestGuessPanel = document.getElementById("best-guess");
 const healthState = document.getElementById("health-state");
 const healthMeta = document.getElementById("health-meta");
+const embeddingMeta = document.getElementById("embedding-meta");
 const historyBody = document.getElementById("history-body");
 const historySummary = document.getElementById("history-summary");
+const winModal = document.getElementById("win-modal");
+const winTitle = document.getElementById("win-title");
+const winSubtitle = document.getElementById("win-subtitle");
+const winTries = document.getElementById("win-tries");
+const winChart = document.getElementById("win-chart");
 
 async function fetchJson(url, options) {
   const requestOptions = Object.assign({ cache: "no-store" }, options || {});
@@ -84,6 +91,8 @@ function clearPersistedState() {
   state.history = [];
   state.bestGuess = null;
   state.latestGuess = null;
+  state.nextGuessNumber = 1;
+  closeWinModal();
 
   try {
     window.localStorage.removeItem(STORAGE_KEY);
@@ -99,6 +108,7 @@ function persistState() {
       date: state.gameDate,
       history: state.history,
       latestGuess: state.latestGuess,
+      nextGuessNumber: state.nextGuessNumber,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch (error) {
@@ -121,6 +131,11 @@ function loadPersistedState() {
     const latestGuess = payload.latestGuess && typeof payload.latestGuess === "object" ? payload.latestGuess : null;
     state.gameDate = typeof payload.date === "string" ? payload.date : null;
     state.history = history;
+    const derivedNextGuessNumber = initializeGuessNumbers(state.history);
+    state.nextGuessNumber = Number.isInteger(payload.nextGuessNumber) && payload.nextGuessNumber > 0
+      ? Math.max(payload.nextGuessNumber, derivedNextGuessNumber)
+      : derivedNextGuessNumber;
+    sortHistoryItems(state.history);
     state.bestGuess = history[0] || null;
     state.latestGuess = latestGuess;
     return history.length > 0;
@@ -142,16 +157,78 @@ function reconcilePersistedStateWithDate(gameDate) {
   }
 
   clearPersistedState();
-  renderBestGuess();
   renderHistory();
   latestResult.className = "glass-panel result-spotlight empty";
-  latestResult.innerHTML = '<h2>Current guess</h2><p>Percentile, closeness, cosine similarity, and top-100 rank will show up here.</p>';
+  latestResult.innerHTML = '<h2>Current guess</h2><p>Percentile, closeness, cosine similarity, and rank will appear here after each guess.</p>';
   setFormMessage("New daily puzzle loaded.");
 }
 
 
 function formatSimilarity(value) {
-  return value.toFixed(4);
+  return value.toFixed(2);
+}
+
+function getGuessNumber(item) {
+  const value = item ? Number(item.guess_number) : NaN;
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function initializeGuessNumbers(items) {
+  let maxGuessNumber = 0;
+  let hasExistingGuessNumber = false;
+
+  items.forEach(function (item) {
+    const guessNumber = getGuessNumber(item);
+    if (guessNumber !== null) {
+      hasExistingGuessNumber = true;
+      maxGuessNumber = Math.max(maxGuessNumber, guessNumber);
+    }
+  });
+
+  if (!hasExistingGuessNumber) {
+    items.forEach(function (item, index) {
+      item.guess_number = index + 1;
+    });
+    return items.length + 1;
+  }
+
+  items.forEach(function (item) {
+    if (getGuessNumber(item) === null) {
+      maxGuessNumber += 1;
+      item.guess_number = maxGuessNumber;
+    }
+  });
+
+  return maxGuessNumber + 1;
+}
+
+function sortHistoryItems(items) {
+  items.sort(function (a, b) {
+    const aHasRank = a.rank !== null && a.rank !== undefined;
+    const bHasRank = b.rank !== null && b.rank !== undefined;
+
+    if (aHasRank && bHasRank) {
+      if (a.rank !== b.rank) {
+        return a.rank - b.rank;
+      }
+      if (b.similarity !== a.similarity) {
+        return b.similarity - a.similarity;
+      }
+      return a.guess.localeCompare(b.guess);
+    }
+
+    if (aHasRank) {
+      return -1;
+    }
+    if (bHasRank) {
+      return 1;
+    }
+
+    if (b.similarity !== a.similarity) {
+      return b.similarity - a.similarity;
+    }
+    return a.guess.localeCompare(b.guess);
+  });
 }
 
 function displayPercentileValue(resultOrValue, isCorrect) {
@@ -233,7 +310,123 @@ function renderDaily(data) {
 
 function renderHealth(data) {
   healthState.textContent = "Ready";
-  healthMeta.textContent = `${data.proteins.toLocaleString()} proteins loaded · embeddings ${data.embedding_shape[1]}D`;
+  healthMeta.textContent = `${data.proteins.toLocaleString()} reviewed proteins loaded locally.`;
+  if (embeddingMeta) {
+    embeddingMeta.innerHTML = `Similarity is computed from cosine similarity over ${data.embedding_shape[1]}D <a href="https://github.com/facebookresearch/esm" target="_blank" rel="noreferrer">ESM-2</a> embeddings sourced from the <a href="https://deepdrug-dpeb.s3.us-west-2.amazonaws.com/ESM-2/ProteinID_proteinSEQ_ESM_emb.csv" target="_blank" rel="noreferrer">DPEB aggregated release</a>.`;
+  }
+}
+
+function buildWinChartMarkup(items) {
+  if (items.length === 0) {
+    return "";
+  }
+
+  const width = 280;
+  const height = 170;
+  const padding = { top: 16, right: 14, bottom: 48, left: 58 };
+  const innerWidth = width - padding.left - padding.right;
+  const innerHeight = height - padding.top - padding.bottom;
+  const similarities = items.map(function (item) {
+    return Math.min(item.similarity, 1);
+  });
+  const guessNumbers = items.map(function (item) {
+    return getGuessNumber(item) || 1;
+  });
+  const minGuessNumber = Math.min.apply(null, guessNumbers);
+  const maxGuessNumber = Math.max.apply(null, guessNumbers);
+
+  let minSimilarity = Math.min.apply(null, similarities);
+  const maxSimilarity = 1;
+  if (minSimilarity === maxSimilarity) {
+    minSimilarity -= 0.01;
+  }
+
+  function xPosition(guessNumber) {
+    if (maxGuessNumber === minGuessNumber) {
+      return width / 2;
+    }
+    return padding.left + ((guessNumber - minGuessNumber) / (maxGuessNumber - minGuessNumber)) * innerWidth;
+  }
+
+  function yPosition(value) {
+    return padding.top + ((maxSimilarity - value) / (maxSimilarity - minSimilarity)) * innerHeight;
+  }
+
+  const points = items.map(function (item) {
+    const guessNumber = getGuessNumber(item) || 1;
+    return `${xPosition(guessNumber)},${yPosition(item.similarity)}`;
+  }).join(" ");
+
+  const gridLines = [0, 0.5, 1].map(function (fraction) {
+    const y = padding.top + innerHeight * fraction;
+    return `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" class="win-chart-grid"></line>`;
+  }).join("");
+
+  const axisLines = `
+    <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${height - padding.bottom}" class="win-chart-axis"></line>
+    <line x1="${padding.left}" y1="${height - padding.bottom}" x2="${width - padding.right}" y2="${height - padding.bottom}" class="win-chart-axis"></line>
+  `;
+
+  const yLabels = [minSimilarity, 1].map(function (value) {
+    const y = yPosition(value);
+    return `<text x="${padding.left - 10}" y="${y + 4}" text-anchor="end" class="win-chart-label">${value.toFixed(2)}</text>`;
+  }).join("");
+
+  const labels = items.map(function (item, index) {
+    const guessNumber = getGuessNumber(item) || 1;
+    if (items.length > 8 && guessNumber !== minGuessNumber && guessNumber !== maxGuessNumber && index !== Math.floor(items.length / 2)) {
+      return "";
+    }
+    const x = xPosition(guessNumber);
+    return `<text x="${x}" y="${height - padding.bottom + 16}" text-anchor="middle" class="win-chart-label">${guessNumber}</text>`;
+  }).join("");
+
+  const dots = items.map(function (item, index) {
+    const guessNumber = getGuessNumber(item) || 1;
+    const x = xPosition(guessNumber);
+    const y = yPosition(item.similarity);
+    const isLast = index === items.length - 1;
+    return `<circle cx="${x}" cy="${y}" r="${isLast ? 4.5 : 3.5}" class="win-chart-dot${isLast ? " is-last" : ""}"></circle>`;
+  }).join("");
+
+  return `
+    <svg viewBox="0 0 ${width} ${height}" class="win-chart-svg" aria-hidden="true">
+      ${gridLines}
+      ${axisLines}
+      <polyline points="${points}" class="win-chart-line"></polyline>
+      ${dots}
+      ${yLabels}
+      ${labels}
+      <text x="${padding.left + innerWidth / 2}" y="${height - 10}" text-anchor="middle" class="win-chart-axis-title">tries</text>
+      <text x="18" y="${padding.top + innerHeight / 2}" text-anchor="middle" class="win-chart-axis-title" transform="rotate(-90 18 ${padding.top + innerHeight / 2})">cosine similarity</text>
+    </svg>
+  `;
+}
+
+function openWinModal(result) {
+  if (!winModal) {
+    return;
+  }
+
+  const orderedGuesses = state.history.slice().sort(function (a, b) {
+    return (getGuessNumber(a) || 0) - (getGuessNumber(b) || 0);
+  });
+  const tries = state.history.length;
+
+  winTitle.textContent = `Congrats, target protein found: ${result.guess}`;
+  winSubtitle.textContent = result.name;
+  winTries.textContent = String(tries);
+  winChart.innerHTML = buildWinChartMarkup(orderedGuesses);
+  winModal.hidden = false;
+  document.body.classList.add("modal-open");
+}
+
+function closeWinModal() {
+  if (!winModal) {
+    return;
+  }
+  winModal.hidden = true;
+  document.body.classList.remove("modal-open");
 }
 
 function renderLatest(result) {
@@ -275,6 +468,9 @@ function renderLatest(result) {
 }
 
 function renderBestGuess() {
+  if (!bestGuessPanel) {
+    return;
+  }
   if (state.bestGuess === null) {
     bestGuessPanel.className = "best-guess empty";
     bestGuessPanel.innerHTML = "<strong>No guesses yet</strong><span>Start exploring the embedding space.</span>";
@@ -316,20 +512,22 @@ function renderHistory() {
     const tone = toneClass(displayPercentile);
     return `
       <article class="history-item">
-        <div class="history-main">
-          <span class="history-rank ${rankClass(item)}">${rankLabel(item)}</span>
-          <div>
-            <strong>${item.guess}</strong>
-            <div class="history-name">${item.name}</div>
-          </div>
+        <div class="history-turn">
+          <strong class="history-turn-number">${getGuessNumber(item) || "—"}</strong>
         </div>
-        <div class="history-metrics">
-          <div class="history-score-row">
-            <span class="history-meta">Similarity percentile</span>
-            <strong class="history-percent">${formatPercentile(displayPercentile)}</strong>
-          </div>
+        <div class="history-status">
+          <span class="history-rank ${rankClass(item)}">${rankLabel(item)}</span>
+        </div>
+        <div class="history-protein">
+          <strong>${item.guess}</strong>
+          <div class="history-name">${item.name}</div>
+        </div>
+        <div class="history-score">
+          <strong class="history-percent">${formatPercentile(displayPercentile)}</strong>
           <div class="history-bar"><span class="bar-fill ${tone}" style="width: ${width}%"></span></div>
-          <div class="history-detail">Cosine similarity ${formatSimilarity(item.similarity)}</div>
+        </div>
+        <div class="history-cosine">
+          <div class="history-detail">${formatSimilarity(item.similarity)}</div>
         </div>
       </article>
     `;
@@ -340,24 +538,28 @@ function updateHistory(result) {
   const existingIndex = state.history.findIndex(function (item) {
     return item.protein_id === result.protein_id;
   });
+  let guessNumber = null;
   if (existingIndex >= 0) {
+    guessNumber = getGuessNumber(state.history[existingIndex]);
     state.history.splice(existingIndex, 1);
+  }
+  if (guessNumber === null) {
+    guessNumber = state.nextGuessNumber;
+    state.nextGuessNumber += 1;
   }
 
   state.gameDate = result.date;
+  result.guess_number = guessNumber;
   state.latestGuess = result;
   state.history.unshift(result);
-  state.history.sort(function (a, b) {
-    if (b.similarity_percentile === a.similarity_percentile) {
-      return a.guess.localeCompare(b.guess);
-    }
-    return b.similarity_percentile - a.similarity_percentile;
-  });
+  sortHistoryItems(state.history);
   state.bestGuess = state.history[0] || null;
   persistState();
   renderLatest(result);
-  renderBestGuess();
   renderHistory();
+  if (result.is_correct) {
+    openWinModal(result);
+  }
 }
 
 function renderSuggestions(items) {
@@ -532,30 +734,41 @@ document.addEventListener("click", function (event) {
   if (event.target.closest(".guess-panel") === null) {
     renderSuggestions([]);
   }
+
+  if (event.target.closest("[data-win-dismiss]")) {
+    closeWinModal();
+  }
+});
+
+document.addEventListener("keydown", function (event) {
+  if (event.key === "Escape" && winModal && !winModal.hidden) {
+    closeWinModal();
+  }
 });
 
 window.addEventListener("DOMContentLoaded", async function () {
   const restored = loadPersistedState();
   if (restored && state.latestGuess) {
     renderLatest(state.latestGuess);
-    renderBestGuess();
     renderHistory();
     setFormMessage("Restored saved guesses.");
   } else {
-    renderBestGuess();
     renderHistory();
   }
 
   loadHealth().catch(function () {
     healthState.textContent = "Unavailable";
     healthMeta.textContent = "Could not reach the backend.";
+    if (embeddingMeta) {
+      embeddingMeta.textContent = "Embedding metadata is unavailable until the backend responds.";
+    }
   });
 
   try {
     await loadDaily();
     reconcilePersistedStateWithDate(state.gameDate);
     if (!restored || !state.latestGuess) {
-      setFormMessage("Backend connected. Start guessing.");
+      setFormMessage("Ready when you are.");
     }
   } catch (error) {
     if (!restored) {
