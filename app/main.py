@@ -75,17 +75,19 @@ class SimilarityCalibration:
 
 
 def closeness_message(
-    similarity: float, calibration: SimilarityCalibration, is_correct: bool = False
+    similarity_percentile: float, is_correct: bool = False
 ) -> str:
     if is_correct:
         return "Correct!"
-    if similarity >= calibration.extremely_close:
-        return "Extremely close"
-    if similarity >= calibration.very_close:
+    if similarity_percentile >= 99.0:
         return "Very close"
-    if similarity >= calibration.close:
+    if similarity_percentile >= 95.0:
         return "Close"
-    return "Far"
+    if similarity_percentile >= 80.0:
+        return "Warm"
+    if similarity_percentile >= 15.0:
+        return "Far"
+    return "Very far"
 
 
 @dataclass(frozen=True)
@@ -354,17 +356,19 @@ class ProteinGameService:
         similarity = float(np.dot(self.data.embeddings[guess_index], self.data.embeddings[target_index]))
         similarity_percentile = self.similarity_percentile(target_index, similarity)
         is_correct = guess_index == target_index
+        if not is_correct:
+            similarity_percentile = min(similarity_percentile, 99.9)
 
         rank: int | None = None
         is_top_100 = False
         if is_correct:
-            rank = 0
+            rank = 1
             is_top_100 = True
         else:
             neighbor_row = self.data.neighbors_top100[target_index]
             match_positions = np.flatnonzero(neighbor_row == guess_index)
             if match_positions.size:
-                rank = int(match_positions[0]) + 1
+                rank = int(match_positions[0]) + 2
                 is_top_100 = True
 
         return GuessResponse(
@@ -377,8 +381,7 @@ class ProteinGameService:
             is_top_100=is_top_100,
             is_correct=is_correct,
             message=closeness_message(
-                similarity,
-                calibration=self.data.similarity_calibration,
+                similarity_percentile,
                 is_correct=is_correct,
             ),
             date=resolved_date,

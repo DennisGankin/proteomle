@@ -14,6 +14,8 @@
   --warm-soft: rgba(239, 143, 63, 0.18);
   --danger: #a63d40;
   --danger-soft: rgba(166, 61, 64, 0.14);
+  --danger-deep: #7f2629;
+  --danger-deep-soft: rgba(127, 38, 41, 0.16);
   --shadow: 0 24px 60px rgba(37, 44, 31, 0.14);
   --radius-xl: 28px;
   --radius-lg: 18px;
@@ -515,6 +517,11 @@ code {
   background: var(--danger-soft);
 }
 
+.result-closeness-tone-vlow {
+  color: var(--danger-deep);
+  background: var(--danger-deep-soft);
+}
+
 .result-message {
   margin: 0;
   font-size: 0.96rem;
@@ -584,6 +591,10 @@ code {
 
 .bar-fill.tone-low {
   background: var(--danger);
+}
+
+.bar-fill.tone-vlow {
+  background: var(--danger-deep);
 }
 
 .result-footnote {

@@ -154,6 +154,16 @@ function formatSimilarity(value) {
   return value.toFixed(4);
 }
 
+function displayPercentileValue(resultOrValue, isCorrect) {
+  if (typeof resultOrValue === "number") {
+    return isCorrect ? resultOrValue : Math.min(resultOrValue, 99.9);
+  }
+  if (!resultOrValue) {
+    return 0;
+  }
+  return resultOrValue.is_correct ? resultOrValue.similarity_percentile : Math.min(resultOrValue.similarity_percentile, 99.9);
+}
+
 function formatPercentile(value) {
   return value.toFixed(1) + "%";
 }
@@ -163,21 +173,27 @@ function clampPercent(value) {
 }
 
 function toneClass(percentile) {
-  if (percentile >= 80) {
+  if (percentile >= 95) {
     return "tone-high";
   }
-  if (percentile >= 45) {
+  if (percentile >= 80) {
     return "tone-mid";
   }
-  return "tone-low";
+  if (percentile >= 15) {
+    return "tone-low";
+  }
+  return "tone-vlow";
 }
 
 function messageToneClass(message) {
-  if (message === "Extremely close" || message === "Very close" || message === "Correct!") {
+  if (message === "Very close" || message === "Close" || message === "Correct!") {
     return "tone-high";
   }
-  if (message === "Close") {
+  if (message === "Warm") {
     return "tone-mid";
+  }
+  if (message === "Very far") {
+    return "tone-vlow";
   }
   return "tone-low";
 }
@@ -221,7 +237,8 @@ function renderHealth(data) {
 }
 
 function renderLatest(result) {
-  const width = clampPercent(result.similarity_percentile);
+  const displayPercentile = displayPercentileValue(result);
+  const width = clampPercent(displayPercentile);
   const tone = messageToneClass(result.message);
 
   latestResult.classList.remove("empty");
@@ -244,7 +261,7 @@ function renderLatest(result) {
           <span class="result-message">${result.message}</span>
         </div>
         <div class="result-percent-wrap">
-          <span class="result-percent-inline">${formatPercentile(result.similarity_percentile)}</span>
+          <span class="result-percent-inline">${formatPercentile(displayPercentile)}</span>
           <div class="result-bar compact"><span class="bar-fill ${tone}" style="width: ${width}%"></span></div>
         </div>
       </div>
@@ -276,7 +293,7 @@ function renderBestGuess() {
         <span class="search-status ${rankClass(best)}">${rankLabel(best)}</span>
       </div>
       <div class="best-guess-metrics">
-        <div class="metric-card"><span>Percentile</span><strong>${formatPercentile(best.similarity_percentile)}</strong></div>
+        <div class="metric-card"><span>Percentile</span><strong>${formatPercentile(displayPercentileValue(best))}</strong></div>
         <div class="metric-card"><span>Closeness</span><strong>${best.message}</strong></div>
         <div class="metric-card"><span>Cosine</span><strong>${formatSimilarity(best.similarity)}</strong></div>
         <div class="metric-card"><span>UniProt</span><strong>${best.protein_id}</strong></div>
@@ -294,8 +311,9 @@ function renderHistory() {
 
   historySummary.textContent = `${state.history.length} guess${state.history.length === 1 ? "" : "es"} submitted.`;
   historyBody.innerHTML = state.history.map(function (item) {
-    const width = clampPercent(item.similarity_percentile);
-    const tone = toneClass(item.similarity_percentile);
+    const displayPercentile = displayPercentileValue(item);
+    const width = clampPercent(displayPercentile);
+    const tone = toneClass(displayPercentile);
     return `
       <article class="history-item">
         <div class="history-main">
@@ -308,7 +326,7 @@ function renderHistory() {
         <div class="history-metrics">
           <div class="history-score-row">
             <span class="history-meta">Similarity percentile</span>
-            <strong class="history-percent">${formatPercentile(item.similarity_percentile)}</strong>
+            <strong class="history-percent">${formatPercentile(displayPercentile)}</strong>
           </div>
           <div class="history-bar"><span class="bar-fill ${tone}" style="width: ${width}%"></span></div>
           <div class="history-detail">Cosine similarity ${formatSimilarity(item.similarity)}</div>
