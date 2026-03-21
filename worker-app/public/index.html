@@ -17,10 +17,9 @@
       <header class="masthead">
         <div class="masthead-grid">
           <div class="masthead-copy-block">
-            <h1>Protle</h1>
-            <h2 class="masthead-subtitle">Daily Protein Guesser</h2>
+            <h1>Protle - Daily Protein Guesser</h1>
             <p class="masthead-copy">
-              Guess today&apos;s protein and navigate through the protein embedding space. The similarity score is based on cosine similarity between ESM embedding.
+              Guess today&apos;s protein and navigate through the protein embedding space. The similarity score is based on cosine similarity between ESM embeddings.
             </p>
           </div>
           <div class="masthead-structure">
@@ -60,17 +59,6 @@
             <div id="suggestions" class="suggestions" hidden></div>
             <p id="form-message" class="form-message" aria-live="polite"></p>
 
-            <div class="meta-strip">
-              <div class="meta-card">
-                <span>Daily puzzle</span>
-                <strong id="daily-date">...</strong>
-              </div>
-              <div class="meta-card meta-card-status">
-                <span>Service</span>
-                <strong id="health-state">Checking...</strong>
-                <em id="health-meta">Loading dataset information.</em>
-              </div>
-            </div>
           </section>
 
           <section id="latest-result" class="glass-panel result-spotlight empty">
@@ -100,6 +88,22 @@
           <div class="embedding-copy">
             <p class="eyebrow">Embedding Space</p>
             <p id="embedding-meta" class="embedding-meta">Loading embedding details.</p>
+            <div class="meta-strip meta-strip-bottom">
+              <div class="meta-card">
+                <span>Daily puzzle</span>
+                <strong id="daily-date">...</strong>
+              </div>
+              <div class="meta-card meta-card-status">
+                <span>Service</span>
+                <strong id="health-state">Checking...</strong>
+                <em id="health-meta">Loading dataset information.</em>
+              </div>
+              <div class="meta-card meta-card-status">
+                <span>Sequence source</span>
+                <strong>ESM embeddings</strong>
+                <em>Cosine similarity over reviewed proteins.</em>
+              </div>
+            </div>
           </div>
         </section>
       </main>
