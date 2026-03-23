@@ -310,7 +310,6 @@ function renderDaily(data) {
   if (structureLengthBadge) {
     structureLengthBadge.textContent = `Sequence length: ${data.protein_length} aa`;
   }
-  state.gameDate = data.date;
 }
 
 function renderHealth(data) {
@@ -662,6 +661,7 @@ function renderSuggestions(items) {
 async function loadDaily() {
   const data = await fetchJson("/daily", { timeoutMs: 10000 });
   renderDaily(data);
+  return data;
 }
 
 async function loadHealth() {
@@ -843,8 +843,8 @@ window.addEventListener("DOMContentLoaded", async function () {
   });
 
   try {
-    await loadDaily();
-    reconcilePersistedStateWithDate(state.gameDate);
+    const dailyData = await loadDaily();
+    reconcilePersistedStateWithDate(dailyData.date);
     loadDailyStructure().catch(function () {
       structureViewer.innerHTML = '<div class="structure-empty">No structure could be loaded for today.</div>';
     });
