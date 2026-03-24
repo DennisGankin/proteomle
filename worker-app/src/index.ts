@@ -93,6 +93,10 @@ function normalizeQuery(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]+/g, "").trim();
 }
 
+function canonicalGuessLabel(proteins: ProteinTable, index: number): string {
+  return proteins.genes[index] || proteins.ids[index];
+}
+
 async function fetchAsset(env: Env, request: Request, path: string): Promise<Response> {
   return env.ASSETS.fetch(new URL(path, request.url));
 }
@@ -338,10 +342,31 @@ async function autocomplete(env: Env, request: Request, query: string, limit: nu
   }));
 }
 
+async function resolveExactProteinIndex(env: Env, request: Request, normalized: string): Promise<number | null> {
+  const searchEntries = await getSearchEntries(env, request);
+  let geneMatch: number | null = null;
+
+  for (let index = 0; index < searchEntries.length; index += 1) {
+    const entry = searchEntries[index];
+    if (entry.proteinId === normalized) {
+      return index;
+    }
+    if (geneMatch === null && entry.gene === normalized) {
+      geneMatch = index;
+    }
+  }
+
+  return geneMatch;
+}
+
 async function resolveGuessIndex(env: Env, request: Request, guess: string): Promise<number> {
   const normalized = normalizeQuery(guess);
   if (!normalized) {
     throw jsonResponse({ detail: "Guess must contain letters or numbers." }, 400);
+  }
+  const exactIndex = await resolveExactProteinIndex(env, request, normalized);
+  if (exactIndex !== null) {
+    return exactIndex;
   }
   const shard = await getAliasShard(env, request, normalized);
   const value = shard[normalized];
@@ -475,7 +500,7 @@ async function guess(env: Env, request: Request): Promise<Response> {
   }
 
   const response: GuessResponse = {
-    guess: rawGuess,
+    guess: canonicalGuessLabel(proteins, guessIndex),
     protein_id: proteins.ids[guessIndex],
     name: proteins.names[guessIndex],
     similarity: roundTo(similarity, 6),
