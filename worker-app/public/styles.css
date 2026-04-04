@@ -154,19 +154,18 @@ code {
   position: relative;
 }
 
-#structure-length-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 68px;
-  padding: 0.35rem 0.65rem;
-  border-radius: 999px;
-  background: rgba(22, 27, 24, 0.06);
-  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
-  font-size: 0.74rem;
-  color: var(--ink);
+.structure-badges-overlay {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
 }
 
+#structure-length-badge,
 #structure-localization-badge {
   display: inline-flex;
   align-items: center;
@@ -178,20 +177,6 @@ code {
   font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
   font-size: 0.74rem;
   color: var(--ink);
-}
-
-.structure-localization-overlay {
-  position: absolute;
-  left: 10px;
-  top: 10px;
-  z-index: 2;
-}
-
-.structure-length-overlay {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  z-index: 2;
 }
 
 .dashboard {
