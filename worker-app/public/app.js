@@ -28,6 +28,9 @@ const embeddingMeta = document.getElementById("embedding-meta");
 const historyBody = document.getElementById("history-body");
 const historySummary = document.getElementById("history-summary");
 const structureLengthBadge = document.getElementById("structure-length-badge");
+const structureLocalizationBadge = document.getElementById("structure-localization-badge");
+const dailyGoTagsShell = document.getElementById("daily-go-tags-shell");
+const dailyGoTags = document.getElementById("daily-go-tags");
 const structureViewer = document.getElementById("structure-viewer");
 const winModal = document.getElementById("win-modal");
 const winTitle = document.getElementById("win-title");
@@ -309,6 +312,26 @@ function renderDaily(data) {
   dailyDate.textContent = data.date;
   if (structureLengthBadge) {
     structureLengthBadge.textContent = `Sequence length: ${data.protein_length} aa`;
+  }
+  if (structureLocalizationBadge) {
+    if (data.localization) {
+      structureLocalizationBadge.textContent = `Localization: ${data.localization}`;
+      structureLocalizationBadge.hidden = false;
+    } else {
+      structureLocalizationBadge.hidden = true;
+    }
+  }
+  if (dailyGoTags && dailyGoTagsShell) {
+    const tags = Array.isArray(data.go_tags) ? data.go_tags.filter(Boolean) : [];
+    if (tags.length > 0) {
+      dailyGoTags.innerHTML = tags.map(function (tag) {
+        return `<span class="hint-pill">${tag}</span>`;
+      }).join("");
+      dailyGoTagsShell.hidden = false;
+    } else {
+      dailyGoTags.innerHTML = "";
+      dailyGoTagsShell.hidden = true;
+    }
   }
 }
 

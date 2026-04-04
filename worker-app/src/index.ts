@@ -55,6 +55,47 @@ type AlphaFoldPrediction = {
   sequenceEnd?: number;
 };
 
+type UniProtSubcellularLocation = {
+  location?: {
+    value?: string;
+  };
+};
+
+type UniProtComment = {
+  commentType?: string;
+  subcellularLocations?: UniProtSubcellularLocation[];
+};
+
+type UniProtKeyword = {
+  category?: string;
+  name?: string;
+};
+
+type UniProtProperty = {
+  key?: string;
+  value?: string;
+};
+
+type UniProtCrossReference = {
+  database?: string;
+  properties?: UniProtProperty[];
+};
+
+type UniProtResult = {
+  comments?: UniProtComment[];
+  keywords?: UniProtKeyword[];
+  uniProtKBCrossReferences?: UniProtCrossReference[];
+};
+
+type UniProtSearchResponse = {
+  results?: UniProtResult[];
+};
+
+type DailyHints = {
+  localization: string | null;
+  goTags: string[];
+};
+
 const datasetCache: {
   manifest?: Promise<Manifest>;
   proteins?: Promise<ProteinTable>;
@@ -63,9 +104,11 @@ const datasetCache: {
   searchEntries?: Promise<SearchEntry[]>;
   sortedSimilarityByTarget: Map<number, Promise<Float32Array>>;
   aliasShardByKey: Map<string, Promise<Record<string, number>>>;
+  dailyHintsByAccession: Map<string, Promise<DailyHints>>;
 } = {
   sortedSimilarityByTarget: new Map(),
   aliasShardByKey: new Map(),
+  dailyHintsByAccession: new Map(),
 };
 
 const MAX_TARGET_CACHE = 4;
@@ -76,6 +119,10 @@ const ALPHAFOLD_HEADERS = {
 };
 const ALPHAFOLD_FILE_HEADERS = {
   Accept: "text/plain",
+  "User-Agent": "Proteomle/1.0 (+https://proteomle.com)",
+};
+const UNIPROT_HEADERS = {
+  Accept: "application/json",
   "User-Agent": "Proteomle/1.0 (+https://proteomle.com)",
 };
 
@@ -97,6 +144,15 @@ function textResponse(payload: string, status = 200, contentType = "text/plain; 
       "cache-control": "no-store",
     },
   });
+}
+
+function titleCase(value: string): string {
+  return value
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function normalizeQuery(value: string): string {
@@ -242,6 +298,144 @@ async function targetIndexForDate(seed: string, gameDate: string, size: number):
     return TARGET_POOL[Number(value % BigInt(TARGET_POOL.length))];
   }
   return Number(value % BigInt(size));
+}
+
+function simplifySubcellularLocation(raw: string): string | null {
+  const cleaned = raw.replace(/\s+/g, " ").split("{")[0].trim();
+  if (!cleaned) {
+    return null;
+  }
+  const primary = cleaned.split(",")[0].trim();
+  if (!primary) {
+    return null;
+  }
+  return titleCase(primary);
+}
+
+function appendUnique(values: string[], value: string | null, limit = 3): void {
+  if (!value || values.includes(value) || values.length >= limit) {
+    return;
+  }
+  values.push(value);
+}
+
+function goPropertyValue(reference: UniProtCrossReference, key: string): string | null {
+  const property = (reference.properties ?? []).find((item) => item.key === key);
+  return property?.value ?? null;
+}
+
+function simplifyGoTag(raw: string): string | null {
+  const value = raw.toLowerCase();
+  const tagRules: Array<[string, RegExp[]]> = [
+    ["Kinase", [/kinase/, /phosphorylation/]],
+    ["Phosphatase", [/phosphatase/, /dephosphorylation/]],
+    ["Receptor signaling", [/receptor/, /signal transduction/, /signaling pathway/]],
+    ["Transcription", [/transcription/, /rna polymerase/, /transcription factor/, /dna-binding/]],
+    ["RNA processing", [/\brna\b/, /splicing/, /spliceosome/, /mrna/, /rrna/, /trna/]],
+    ["DNA repair", [/dna repair/, /dna damage/, /double-strand break/, /genome integrity/, /replication checkpoint/]],
+    ["Cell cycle", [/cell cycle/, /mitotic/, /checkpoint/, /chromosome segregation/]],
+    ["Apoptosis", [/apoptosis/, /apoptotic/, /cell death/, /necrosis/]],
+    ["Immune signaling", [/immune/, /interferon/, /cytokine/, /chemokine/, /antigen/]],
+    ["Cytoskeleton", [/cytoskeleton/, /microtubule/, /actin/, /centrosome/, /cilium/]],
+    ["Chromatin", [/chromatin/, /histone/, /nucleosome/, /epigenetic/]],
+    ["Protein homeostasis", [/ubiquitin/, /proteasom/, /protein folding/, /chaperone/, /autophagy/]],
+    ["Transport", [/transport/, /channel/, /pump/, /vesicle/, /ion homeostasis/]],
+    ["Metabolism", [/metabolic process/, /biosynthetic process/, /catabolic process/, /oxidation-reduction/]],
+  ];
+
+  for (const [tag, patterns] of tagRules) {
+    if (patterns.some((pattern) => pattern.test(value))) {
+      return tag;
+    }
+  }
+  return null;
+}
+
+function extractGoTags(entry: UniProtResult): string[] {
+  const tags: string[] = [];
+
+  for (const reference of entry.uniProtKBCrossReferences ?? []) {
+    if (reference.database !== "GO") {
+      continue;
+    }
+    const goTerm = goPropertyValue(reference, "GoTerm");
+    if (!goTerm || goTerm.startsWith("C:")) {
+      continue;
+    }
+    appendUnique(tags, simplifyGoTag(goTerm.slice(2)), 3);
+    if (tags.length >= 3) {
+      return tags;
+    }
+  }
+
+  for (const keyword of entry.keywords ?? []) {
+    if (keyword.category === "Cellular component" || keyword.category === "Technical term" || keyword.category === "Disease") {
+      continue;
+    }
+    appendUnique(tags, simplifyGoTag(keyword.name ?? ""), 3);
+    if (tags.length >= 3) {
+      return tags;
+    }
+  }
+
+  return tags;
+}
+
+async function getDailyHintsForAccession(accession: string): Promise<DailyHints> {
+  let cached = datasetCache.dailyHintsByAccession.get(accession);
+  if (!cached) {
+    cached = (async () => {
+      try {
+        const response = await fetch(
+          `https://rest.uniprot.org/uniprotkb/search?query=accession:${encodeURIComponent(accession)}&format=json&fields=cc_subcellular_location,go_p,go_f,keyword`,
+          { headers: UNIPROT_HEADERS },
+        );
+        if (!response.ok) {
+          console.warn("UniProt hint lookup failed", response.status);
+          return { localization: null, goTags: [] };
+        }
+
+        const payload = (await response.json()) as UniProtSearchResponse;
+        const entry = Array.isArray(payload.results) ? payload.results[0] : null;
+        if (!entry) {
+          return { localization: null, goTags: [] };
+        }
+
+        const uniqueLocations: string[] = [];
+        for (const comment of entry.comments ?? []) {
+          if (comment.commentType !== "SUBCELLULAR LOCATION") {
+            continue;
+          }
+          for (const subcellularLocation of comment.subcellularLocations ?? []) {
+            const simplified = simplifySubcellularLocation(subcellularLocation.location?.value ?? "");
+            if (simplified && !uniqueLocations.includes(simplified)) {
+              uniqueLocations.push(simplified);
+            }
+          }
+        }
+        let localization: string | null = null;
+        if (uniqueLocations.length > 0) {
+          localization = uniqueLocations.slice(0, 2).join(" / ");
+        } else {
+          const keywordLocation = (entry.keywords ?? [])
+            .filter((keyword) => keyword.category === "Cellular component")
+            .map((keyword) => simplifySubcellularLocation(keyword.name ?? ""))
+            .find((value) => Boolean(value));
+          localization = keywordLocation ?? null;
+        }
+
+        return {
+          localization,
+          goTags: extractGoTags(entry),
+        };
+      } catch (error) {
+        console.warn("UniProt hint lookup failed");
+        return { localization: null, goTags: [] };
+      }
+    })();
+    datasetCache.dailyHintsByAccession.set(accession, cached);
+  }
+  return cached;
 }
 
 function dotProduct(embeddings: Int8Array, dimension: number, leftIndex: number, rightIndex: number): number {
@@ -404,9 +598,12 @@ async function dailySummary(env: Env, request: Request, gameDate: string): Promi
   const proteins = await getProteins(env, request);
   const seed = env.DAILY_SEED || "proteomle-reviewed-v1";
   const targetIndex = await targetIndexForDate(seed, gameDate, manifest.proteins);
+  const hints = await getDailyHintsForAccession(proteins.ids[targetIndex]);
   return jsonResponse({
     date: gameDate,
     protein_length: proteins.lengths[targetIndex],
+    localization: hints.localization,
+    go_tags: hints.goTags,
     category: null,
     dataset_size: manifest.proteins,
   });
