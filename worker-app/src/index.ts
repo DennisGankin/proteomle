@@ -432,13 +432,13 @@ async function dailyStructure(env: Env, request: Request, gameDate: string): Pro
     headers: ALPHAFOLD_HEADERS,
   });
   if (!predictionResponse.ok) {
-    console.warn("AlphaFold prediction lookup failed", accession, predictionResponse.status);
+    console.warn("AlphaFold prediction lookup failed", predictionResponse.status);
     return textResponse("Structure unavailable.", 404);
   }
 
   const predictions = (await predictionResponse.json()) as AlphaFoldPrediction[];
   if (!Array.isArray(predictions) || predictions.length === 0) {
-    console.warn("AlphaFold prediction payload empty", accession);
+    console.warn("AlphaFold prediction payload empty");
     return textResponse("Structure unavailable.", 404);
   }
 
@@ -447,7 +447,7 @@ async function dailyStructure(env: Env, request: Request, gameDate: string): Pro
     .sort((left, right) => (left.sequenceStart ?? 0) - (right.sequenceStart ?? 0))[0];
 
   if (!selectedPrediction.pdbUrl) {
-    console.warn("AlphaFold prediction missing pdbUrl", accession);
+    console.warn("AlphaFold prediction missing pdbUrl");
     return textResponse("Structure unavailable.", 404);
   }
 
@@ -455,13 +455,13 @@ async function dailyStructure(env: Env, request: Request, gameDate: string): Pro
     headers: ALPHAFOLD_FILE_HEADERS,
   });
   if (!pdbResponse.ok) {
-    console.warn("AlphaFold pdb download failed", accession, pdbResponse.status, selectedPrediction.pdbUrl);
+    console.warn("AlphaFold pdb download failed", pdbResponse.status);
     return textResponse("Structure unavailable.", 404);
   }
 
   const sanitizedPdb = sanitizePdb(await pdbResponse.text());
   if (!sanitizedPdb) {
-    console.warn("Sanitized AlphaFold pdb is empty", accession, selectedPrediction.pdbUrl);
+    console.warn("Sanitized AlphaFold pdb is empty");
     return textResponse("Structure unavailable.", 404);
   }
 
