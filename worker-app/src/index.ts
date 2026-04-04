@@ -1,3 +1,5 @@
+import { TARGET_POOL, TARGET_POOL_SIZE } from "./target-pool.generated";
+
 interface Env {
   ASSETS: Fetcher;
   DAILY_SEED?: string;
@@ -236,6 +238,9 @@ async function targetIndexForDate(seed: string, gameDate: string, size: number):
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   const view = new DataView(digest);
   const value = view.getBigUint64(0, false);
+  if (TARGET_POOL.length > 0) {
+    return TARGET_POOL[Number(value % BigInt(TARGET_POOL.length))];
+  }
   return Number(value % BigInt(size));
 }
 
@@ -473,6 +478,7 @@ async function health(env: Env, request: Request): Promise<Response> {
   return jsonResponse({
     status: "ok",
     proteins: manifest.proteins,
+    daily_target_pool: TARGET_POOL_SIZE,
     aliases: manifest.alias_count,
     embedding_shape: [manifest.proteins, manifest.dimension],
     neighbors_shape: [manifest.proteins, 100],

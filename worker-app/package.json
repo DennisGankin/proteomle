@@ -7,7 +7,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "build:data": "uv run python tools/export_dataset.py"
+    "build:data": "uv run python tools/export_dataset.py",
+    "build:target-pool": "python tools/build_target_pool.py"
   },
   "devDependencies": {
     "typescript": "^5.8.2",

@@ -23,6 +23,7 @@ The current FastAPI app depends on `duckdb`, `numpy`, and local binary artifacts
 - neighbors are exported as `neighbors.i16.bin`
 - protein metadata is stored in `proteins.json`
 - alias resolution uses small JSON shards in `public/data/aliases/`
+- daily target selection can be restricted to a generated whitelist in `src/target-pool.generated.ts`
 - percentile scoring is computed inside the Worker from the quantized embedding matrix and cached per target
 
 ## Caveat
@@ -35,6 +36,12 @@ From the repository root:
 
 ```bash
 uv run python worker-app/tools/export_dataset.py
+```
+
+To rebuild the curated daily target whitelist:
+
+```bash
+python worker-app/tools/build_target_pool.py --top-n 3000
 ```
 
 ## Run locally
