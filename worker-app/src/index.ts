@@ -68,6 +68,14 @@ const datasetCache: {
 
 const MAX_TARGET_CACHE = 4;
 const SCALE = 127 * 127;
+const ALPHAFOLD_HEADERS = {
+  Accept: "application/json",
+  "User-Agent": "Proteomle/1.0 (+https://proteomle.com)",
+};
+const ALPHAFOLD_FILE_HEADERS = {
+  Accept: "text/plain",
+  "User-Agent": "Proteomle/1.0 (+https://proteomle.com)",
+};
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -400,7 +408,7 @@ async function dailySummary(env: Env, request: Request, gameDate: string): Promi
 }
 
 function sanitizePdb(pdbText: string): string {
-  const allowedPrefixes = ["ATOM  ", "HETATM", "ANISOU", "CONECT", "TER", "MODEL ", "ENDMDL"];
+  const allowedPrefixes = ["ATOM", "HETATM", "ANISOU", "CONECT", "TER", "MODEL", "ENDMDL", "END"];
   const lines = pdbText.split(/\r?\n/).filter((line) => {
     return allowedPrefixes.some((prefix) => line.startsWith(prefix));
   });
@@ -420,13 +428,17 @@ async function dailyStructure(env: Env, request: Request, gameDate: string): Pro
   const targetIndex = await targetIndexForDate(seed, gameDate, manifest.proteins);
   const accession = proteins.ids[targetIndex];
 
-  const predictionResponse = await fetch(`https://alphafold.ebi.ac.uk/api/prediction/${encodeURIComponent(accession)}`);
+  const predictionResponse = await fetch(`https://alphafold.ebi.ac.uk/api/prediction/${encodeURIComponent(accession)}`, {
+    headers: ALPHAFOLD_HEADERS,
+  });
   if (!predictionResponse.ok) {
+    console.warn("AlphaFold prediction lookup failed", accession, predictionResponse.status);
     return textResponse("Structure unavailable.", 404);
   }
 
   const predictions = (await predictionResponse.json()) as AlphaFoldPrediction[];
   if (!Array.isArray(predictions) || predictions.length === 0) {
+    console.warn("AlphaFold prediction payload empty", accession);
     return textResponse("Structure unavailable.", 404);
   }
 
@@ -435,16 +447,21 @@ async function dailyStructure(env: Env, request: Request, gameDate: string): Pro
     .sort((left, right) => (left.sequenceStart ?? 0) - (right.sequenceStart ?? 0))[0];
 
   if (!selectedPrediction.pdbUrl) {
+    console.warn("AlphaFold prediction missing pdbUrl", accession);
     return textResponse("Structure unavailable.", 404);
   }
 
-  const pdbResponse = await fetch(selectedPrediction.pdbUrl);
+  const pdbResponse = await fetch(selectedPrediction.pdbUrl, {
+    headers: ALPHAFOLD_FILE_HEADERS,
+  });
   if (!pdbResponse.ok) {
+    console.warn("AlphaFold pdb download failed", accession, pdbResponse.status, selectedPrediction.pdbUrl);
     return textResponse("Structure unavailable.", 404);
   }
 
   const sanitizedPdb = sanitizePdb(await pdbResponse.text());
   if (!sanitizedPdb) {
+    console.warn("Sanitized AlphaFold pdb is empty", accession, selectedPrediction.pdbUrl);
     return textResponse("Structure unavailable.", 404);
   }
 
